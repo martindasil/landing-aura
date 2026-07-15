@@ -1,9 +1,16 @@
 import { useState, useRef, useEffect } from "react";
+import config from "./configs/activo.js";
 
 // ─────────────────────────────────────────────────────────────
-// VERSIÓN PRODUCCIÓN — Landing interactiva de análisis estético
+// VERSIÓN PRODUCCIÓN — Landing interactiva multi-cliente
 // La llamada a la IA pasa por tu webhook de n8n (la clave API
 // vive en n8n, nunca en el navegador).
+//
+// Todo el contenido de negocio (marca, textos, criterios de
+// análisis, bloques de respuesta, datos de negocio) vive en
+// src/configs/*.js. Este componente no debe contener texto ni
+// lógica específica de ningún cliente — para cambiar de cliente,
+// edita únicamente src/configs/activo.js.
 //
 // CONFIGURA ESTAS DOS URLS ANTES DE DESPLEGAR:
 // ─────────────────────────────────────────────────────────────
@@ -15,13 +22,190 @@ const WEBHOOK_URL = "https://random-n8n.9zi4ji.easypanel.host/webhook/analisis-p
 // Si lo dejas vacío (""), el formulario funciona pero no envía nada.
 const LEAD_WEBHOOK_URL = "";
 
-const LOADING_MSGS = [
-  "Mapeando zonas faciales…",
-  "Evaluando luminosidad y tono…",
-  "Analizando textura e hidratación…",
-  "Midiendo líneas de expresión…",
-  "Preparando tu informe personalizado…",
-];
+const { marca, analisis, respuesta } = config;
+const { colores, hero, textos_upload: t, footer } = marca;
+
+// Convierte "texto *destacado*" en JSX con <em> en la parte marcada
+function renderEmphasis(text) {
+  const parts = text.split(/\*(.+?)\*/g);
+  return parts.map((part, i) => (i % 2 === 1 ? <em key={i}>{part}</em> : part));
+}
+
+const scoreTone = (n) => (n >= 75 ? "var(--sage)" : n >= 55 ? "var(--amber)" : "var(--clay)");
+
+// ── Renderizadores de bloque (result.bloques[].tipo) ──────────
+// Catálogo fijo definido en el contrato de respuesta de la IA.
+// Cualquier tipo no reconocido se ignora (defensa ante payloads manipulados).
+
+function BloquePuntuaciones({ items, barsOn }) {
+  if (!items?.length) return null;
+  return (
+    <div className="card">
+      <div className="card-label">Puntuación por zonas</div>
+      {items.map((z, i) => (
+        <div className="zone" key={i}>
+          <div className="zone-top">
+            <span className="zone-name">{z.nombre}</span>
+            <span className="zone-score" style={{ color: scoreTone(z.puntuacion) }}>
+              {z.puntuacion}
+            </span>
+          </div>
+          <div className="bar">
+            <div
+              style={{
+                width: barsOn ? `${z.puntuacion}%` : 0,
+                background: scoreTone(z.puntuacion),
+                transitionDelay: `${i * 90}ms`,
+              }}
+            />
+          </div>
+          <div className="zone-obs">{z.observacion}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BloqueFortalezas({ items }) {
+  if (!items?.length) return null;
+  return (
+    <div className="card">
+      <div className="card-label">Lo que ya funciona bien</div>
+      <div className="strengths">
+        {items.map((f, i) => (
+          <div className="strength" key={i}>
+            <span className="dot">✦</span>
+            <span>{f}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BloqueRecomendaciones({ items }) {
+  if (!items?.length) return null;
+  return (
+    <div className="card">
+      <div className="card-label">Recomendaciones</div>
+      {items.map((r, i) => (
+        <div className="treat" key={i}>
+          <div className="treat-top">
+            <span className="treat-name">{r.titulo}</span>
+          </div>
+          {r.zona && <div className="treat-zone">{r.zona}</div>}
+          {r.beneficio && <div className="treat-benefit"><strong>{r.beneficio}</strong></div>}
+          {r.detalle && <div className="treat-benefit">{r.detalle}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BloqueChecklist({ items }) {
+  if (!items?.length) return null;
+  const tone = (estado) =>
+    estado === "ok" ? "var(--sage)" : estado === "aviso" ? "var(--amber)" : "var(--clay)";
+  const icon = (estado) => (estado === "ok" ? "✓" : estado === "aviso" ? "!" : "✕");
+  return (
+    <div className="card">
+      <div className="card-label">Checklist</div>
+      <div className="strengths">
+        {items.map((c, i) => (
+          <div className="strength" key={i}>
+            <span className="dot" style={{ color: tone(c.estado) }}>
+              {icon(c.estado)}
+            </span>
+            <span>
+              <strong>{c.nombre}</strong>
+              {c.observacion ? ` — ${c.observacion}` : ""}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BloquePropuesta({ partidas }) {
+  if (!partidas?.length) return null;
+  return (
+    <div className="card">
+      <div className="card-label">Propuesta</div>
+      {partidas.map((p, i) => (
+        <div className="treat" key={i}>
+          <div className="treat-top">
+            <span className="treat-name">{p.nombre}</span>
+          </div>
+          <div className="treat-benefit">{p.descripcion}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BloqueHorquillaPrecio({ minimo, maximo, moneda, nota }) {
+  if (minimo == null || maximo == null) return null;
+  return (
+    <div className="card">
+      <div className="card-label">Rango de precio orientativo</div>
+      <div className="price-range">
+        {minimo}–{maximo} {moneda || ""}
+      </div>
+      {nota && <div className="zone-obs" style={{ textAlign: "center" }}>{nota}</div>}
+      <div className="price-disclaimer">
+        Precio orientativo. El presupuesto exacto se confirma tras una visita.
+      </div>
+    </div>
+  );
+}
+
+function BloqueImagenDespues({ url, etiqueta_legal }) {
+  // Fase 2 (pendiente): hoy en día n8n no genera esta imagen todavía.
+  // Si en el futuro el webhook empieza a enviar este bloque con una
+  // url, se pintará automáticamente sin más cambios en el componente.
+  if (!url) return null;
+  return (
+    <div className="card">
+      <div className="card-label">Simulación</div>
+      <img src={url} alt="Simulación del resultado" style={{ width: "100%", borderRadius: 14, display: "block" }} />
+      {etiqueta_legal && (
+        <div className="zone-obs" style={{ marginTop: 8, fontStyle: "italic" }}>
+          {etiqueta_legal}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function renderBloque(bloque, i, barsOn) {
+  switch (bloque.tipo) {
+    case "puntuaciones":
+      return <BloquePuntuaciones key={i} items={bloque.items} barsOn={barsOn} />;
+    case "fortalezas":
+      return <BloqueFortalezas key={i} items={bloque.items} />;
+    case "recomendaciones":
+      return <BloqueRecomendaciones key={i} items={bloque.items} />;
+    case "checklist":
+      return <BloqueChecklist key={i} items={bloque.items} />;
+    case "propuesta":
+      return <BloquePropuesta key={i} partidas={bloque.partidas} />;
+    case "horquilla_precio":
+      return (
+        <BloqueHorquillaPrecio
+          key={i}
+          minimo={bloque.minimo}
+          maximo={bloque.maximo}
+          moneda={bloque.moneda}
+          nota={bloque.nota}
+        />
+      );
+    case "imagen_despues":
+      return <BloqueImagenDespues key={i} url={bloque.url} etiqueta_legal={bloque.etiqueta_legal} />;
+    default:
+      return null;
+  }
+}
 
 export default function LandingAura() {
   const [view, setView] = useState("upload"); // upload | analyzing | report | form | done
@@ -36,17 +220,21 @@ export default function LandingAura() {
   const fileRef = useRef(null);
   const imgB64 = useRef(null);
 
+  const mensajesCarga = analisis.mensajes_carga?.length
+    ? analisis.mensajes_carga
+    : ["Analizando…"];
+
   useEffect(() => {
     if (view !== "analyzing") return;
-    const t = setInterval(() => setMsgIdx((i) => (i + 1) % LOADING_MSGS.length), 1900);
-    return () => clearInterval(t);
+    const tick = setInterval(() => setMsgIdx((i) => (i + 1) % mensajesCarga.length), 1900);
+    return () => clearInterval(tick);
   }, [view]);
 
   useEffect(() => {
     if (view === "report") {
       setBarsOn(false);
-      const t = setTimeout(() => setBarsOn(true), 150);
-      return () => clearTimeout(t);
+      const tmr = setTimeout(() => setBarsOn(true), 150);
+      return () => clearTimeout(tmr);
     }
   }, [view]);
 
@@ -98,15 +286,19 @@ export default function LandingAura() {
       const response = await fetch(WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imagen: imgB64.current }),
+        // n8n construye el prompt a partir de `analisis` y valida que
+        // `bloques_activos` solo contenga tipos del catálogo fijo
+        // (ver n8n-PROMPT-BUILDER.md).
+        body: JSON.stringify({
+          imagen: imgB64.current,
+          analisis: analisis,
+          bloques_activos: respuesta.bloques,
+        }),
       });
       if (!response.ok) throw new Error(`Webhook respondió ${response.status}`);
       const parsed = await response.json();
-      if (!parsed.es_rostro) {
-        setError(
-          parsed.motivo ||
-            "No hemos detectado un rostro en la foto. Prueba con una foto de frente y con buena luz."
-        );
+      if (!parsed.es_valido) {
+        setError(parsed.motivo || analisis.rechazo);
         setView("upload");
         return;
       }
@@ -119,7 +311,10 @@ export default function LandingAura() {
   };
 
   const submitLead = async () => {
-    if (!lead.nombre.trim() || lead.telefono.trim().length < 9 || sending) return;
+    const campos = respuesta.cta.campos;
+    if (campos.includes("nombre") && !lead.nombre.trim()) return;
+    if (campos.includes("telefono") && lead.telefono.trim().length < 9) return;
+    if (sending) return;
     setSending(true);
     if (LEAD_WEBHOOK_URL) {
       try {
@@ -131,8 +326,8 @@ export default function LandingAura() {
             telefono: lead.telefono.trim(),
             franja: lead.franja,
             resumen: result?.resumen || "",
-            recomendaciones: result?.recomendaciones || [],
-            origen: "landing-analisis-piel",
+            bloques: result?.bloques || [],
+            origen: `landing-${marca.nombre.toLowerCase().replace(/\s+/g, "-")}`,
             fecha: new Date().toISOString(),
           }),
         });
@@ -155,7 +350,10 @@ export default function LandingAura() {
     setLead({ nombre: "", telefono: "", franja: "Mañanas" });
   };
 
-  const scoreTone = (n) => (n >= 75 ? "var(--sage)" : n >= 55 ? "var(--amber)" : "var(--clay)");
+  const campos = respuesta.cta.campos;
+  const formValido =
+    (!campos.includes("nombre") || lead.nombre.trim()) &&
+    (!campos.includes("telefono") || lead.telefono.trim().length >= 9);
 
   return (
     <div className="page">
@@ -163,16 +361,17 @@ export default function LandingAura() {
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
 
         :root {
-          --bg: #FBF8F4;
-          --card: #FFFFFF;
-          --ink: #22312B;
-          --ink-soft: #5C6B63;
-          --sage: #3E6B5C;
-          --sage-deep: #2C5044;
-          --blush: #EBCDBB;
-          --amber: #C89A4B;
-          --clay: #B96B4F;
-          --line: #E7DFD5;
+          --bg: ${colores.bg};
+          --card: ${colores.card};
+          --ink: ${colores.ink};
+          --ink-soft: ${colores.inkSoft};
+          --sage: ${colores.sage};
+          --sage-deep: ${colores.sageDeep};
+          --sage-soft: ${colores.sageSoft};
+          --blush: ${colores.blush};
+          --amber: ${colores.amber};
+          --clay: ${colores.clay};
+          --line: ${colores.line};
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         .page {
@@ -185,8 +384,7 @@ export default function LandingAura() {
         .wrap { max-width: 680px; margin: 0 auto; padding: 0 20px 64px; }
 
         .topbar { display: flex; align-items: center; justify-content: space-between; padding: 20px 0 0; }
-        .brand { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 600; letter-spacing: 0.02em; }
-        .brand span { color: var(--sage); }
+        .brand { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 600; letter-spacing: 0.02em; color: var(--sage-deep); }
 
         .hero { padding: 52px 0 8px; text-align: center; }
         .eyebrow {
@@ -211,10 +409,10 @@ export default function LandingAura() {
           padding: 40px 20px; text-align: center; cursor: pointer;
           transition: border-color .2s, background .2s;
         }
-        .dropzone:hover { border-color: var(--sage); background: #F6F9F7; }
+        .dropzone:hover { border-color: var(--sage); background: var(--sage-soft); }
         .dz-icon {
           width: 52px; height: 52px; border-radius: 50%;
-          background: #EDF3F0; color: var(--sage);
+          background: var(--sage-soft); color: var(--sage);
           display: flex; align-items: center; justify-content: center;
           margin: 0 auto 14px; font-size: 22px;
         }
@@ -315,12 +513,18 @@ export default function LandingAura() {
         .treat:last-child { margin-bottom: 0; }
         .treat-top { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
         .treat-name { font-family: 'Fraunces', serif; font-size: 17px; font-weight: 600; }
-        .treat-sessions {
-          font-size: 11.5px; font-weight: 600; color: var(--sage);
-          background: #EDF3F0; padding: 4px 10px; border-radius: 100px; white-space: nowrap;
-        }
         .treat-zone { font-size: 12px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
-        .treat-benefit { font-size: 13.5px; color: var(--ink-soft); line-height: 1.5; }
+        .treat-benefit { font-size: 13.5px; color: var(--ink-soft); line-height: 1.5; margin-top: 2px; }
+
+        .price-range {
+          font-family: 'Fraunces', serif; font-size: 32px; font-weight: 600;
+          color: var(--sage-deep); text-align: center; margin: 4px 0 6px;
+        }
+        .price-disclaimer {
+          margin-top: 14px; background: var(--sage-soft); border-radius: 12px;
+          padding: 10px 14px; font-size: 12.5px; color: var(--ink-soft);
+          text-align: center; line-height: 1.5;
+        }
 
         .cta-block {
           margin-top: 26px; text-align: center; background: var(--sage-deep);
@@ -346,7 +550,7 @@ export default function LandingAura() {
 
         .done { text-align: center; padding: 72px 0 0; }
         .done .check {
-          width: 68px; height: 68px; border-radius: 50%; background: #EDF3F0;
+          width: 68px; height: 68px; border-radius: 50%; background: var(--sage-soft);
           color: var(--sage); font-size: 30px; display: flex; align-items: center;
           justify-content: center; margin: 0 auto 22px;
         }
@@ -361,36 +565,33 @@ export default function LandingAura() {
 
       <div className="wrap">
         <div className="topbar">
-          <div className="brand">Clínica <span>Aura</span></div>
+          <div className="brand">{marca.nombre}</div>
         </div>
 
         {view === "upload" && (
           <>
             <div className="hero">
-              <div className="eyebrow">Medicina estética · Diagnóstico con IA</div>
-              <h1>Descubre lo que tu piel <em>necesita</em> en 30 segundos</h1>
-              <p className="sub">
-                Sube una foto de tu rostro y nuestra IA te preparará un informe
-                personalizado con el estado de tu piel y los tratamientos que mejor te irían.
-              </p>
+              <div className="eyebrow">{hero.eyebrow}</div>
+              <h1>{renderEmphasis(hero.titulo)}</h1>
+              <p className="sub">{hero.subtitulo}</p>
             </div>
 
             <div className="uploader">
               {!photo ? (
                 <div className="dropzone" onClick={() => fileRef.current?.click()}>
                   <div className="dz-icon">✦</div>
-                  <div className="dz-title">Sube tu foto o hazte un selfie</div>
-                  <div className="dz-hint">De frente, con buena luz y sin maquillaje si es posible</div>
+                  <div className="dz-title">{t.dropzone_titulo}</div>
+                  <div className="dz-hint">{t.dropzone_hint}</div>
                 </div>
               ) : (
                 <div className="preview">
                   <img src={photo} alt="Tu foto" />
                   <div className="meta">
-                    <b>Foto lista para analizar</b>
-                    <span>Se procesa de forma segura y no se almacena.</span>
+                    <b>{t.preview_titulo}</b>
+                    <span>{t.preview_nota}</span>
                     <div style={{ marginTop: 6 }}>
                       <button className="link-btn" onClick={() => fileRef.current?.click()}>
-                        Cambiar foto
+                        {t.cambiar_foto}
                       </button>
                     </div>
                   </div>
@@ -424,15 +625,13 @@ export default function LandingAura() {
               </div>
 
               <button className="btn" disabled={!photo || !consent} onClick={analyze}>
-                Analizar mi piel →
+                {t.boton_analizar}
               </button>
 
               {error && <div className="error">{error}</div>}
             </div>
 
-            <p className="privacy-note">
-              Análisis gratuito y sin compromiso · Resultados al instante
-            </p>
+            <p className="privacy-note">{t.nota_privacidad}</p>
           </>
         )}
 
@@ -443,8 +642,8 @@ export default function LandingAura() {
               <div className="scan-grid" />
               <div className="scan-line" />
             </div>
-            <div className="scan-msg">{LOADING_MSGS[msgIdx]}</div>
-            <div className="scan-sub">Esto suele tardar unos 15 segundos</div>
+            <div className="scan-msg">{mensajesCarga[msgIdx]}</div>
+            <div className="scan-sub">{t.scan_sub}</div>
           </div>
         )}
 
@@ -452,126 +651,77 @@ export default function LandingAura() {
           <>
             <div className="report-head">
               <img className="thumb" src={photo} alt="" />
-              <h2>Tu informe de piel</h2>
+              <h2>{t.informe_titulo}</h2>
               <p>{result.resumen}</p>
             </div>
 
-            <div className="card">
-              <div className="card-label">Análisis por zonas</div>
-              {result.zonas?.map((z, i) => (
-                <div className="zone" key={i}>
-                  <div className="zone-top">
-                    <span className="zone-name">{z.nombre}</span>
-                    <span className="zone-score" style={{ color: scoreTone(z.puntuacion) }}>
-                      {z.puntuacion}
-                    </span>
-                  </div>
-                  <div className="bar">
-                    <div
-                      style={{
-                        width: barsOn ? `${z.puntuacion}%` : 0,
-                        background: scoreTone(z.puntuacion),
-                        transitionDelay: `${i * 90}ms`,
-                      }}
-                    />
-                  </div>
-                  <div className="zone-obs">{z.observacion}</div>
-                </div>
-              ))}
-            </div>
-
-            {result.fortalezas?.length > 0 && (
-              <div className="card">
-                <div className="card-label">Lo que tu piel ya hace bien</div>
-                <div className="strengths">
-                  {result.fortalezas.map((f, i) => (
-                    <div className="strength" key={i}>
-                      <span className="dot">✦</span>
-                      <span>{f}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="card">
-              <div className="card-label">Tratamientos recomendados para ti</div>
-              {result.recomendaciones?.map((r, i) => (
-                <div className="treat" key={i}>
-                  <div className="treat-top">
-                    <span className="treat-name">{r.tratamiento}</span>
-                    <span className="treat-sessions">{r.sesiones}</span>
-                  </div>
-                  <div className="treat-zone">{r.zona}</div>
-                  <div className="treat-benefit">{r.beneficio}</div>
-                </div>
-              ))}
-            </div>
+            {result.bloques?.map((b, i) => renderBloque(b, i, barsOn))}
 
             <div className="cta-block">
-              <h3>¿Quieres verlo en persona?</h3>
-              <p>
-                Reserva una valoración gratuita con nuestro equipo médico.
-                Revisaremos tu informe contigo, sin compromiso.
-              </p>
+              <h3>{respuesta.cta.titulo}</h3>
+              <p>{respuesta.cta.texto}</p>
               <button className="btn" onClick={() => setView("form")}>
-                Quiero mi valoración gratuita
+                {respuesta.cta.texto_boton}
               </button>
             </div>
 
             <div className="again">
-              <button className="link-btn" onClick={reset}>Analizar otra foto</button>
+              <button className="link-btn" onClick={reset}>{t.analizar_otra}</button>
             </div>
           </>
         )}
 
         {view === "form" && (
           <div className="card form-card">
-            <h2>Reserva tu valoración</h2>
-            <p className="lead-sub">
-              Déjanos tus datos y te llamamos para darte cita. Sin compromiso.
-            </p>
-            <div className="field">
-              <label htmlFor="nombre">Nombre</label>
-              <input
-                id="nombre"
-                type="text"
-                placeholder="Tu nombre"
-                value={lead.nombre}
-                onChange={(e) => setLead({ ...lead, nombre: e.target.value })}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="telefono">Teléfono</label>
-              <input
-                id="telefono"
-                type="tel"
-                placeholder="600 000 000"
-                value={lead.telefono}
-                onChange={(e) => setLead({ ...lead, telefono: e.target.value })}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="franja">¿Cuándo prefieres que te llamemos?</label>
-              <select
-                id="franja"
-                value={lead.franja}
-                onChange={(e) => setLead({ ...lead, franja: e.target.value })}
-              >
-                <option>Mañanas</option>
-                <option>Mediodía</option>
-                <option>Tardes</option>
-              </select>
-            </div>
-            <button
-              className="btn"
-              disabled={!lead.nombre.trim() || lead.telefono.trim().length < 9 || sending}
-              onClick={submitLead}
-            >
-              {sending ? "Enviando…" : "Enviar y reservar"}
+            <h2>{t.form_titulo}</h2>
+            <p className="lead-sub">{t.form_subtitulo}</p>
+
+            {campos.includes("nombre") && (
+              <div className="field">
+                <label htmlFor="nombre">Nombre</label>
+                <input
+                  id="nombre"
+                  type="text"
+                  placeholder="Tu nombre"
+                  value={lead.nombre}
+                  onChange={(e) => setLead({ ...lead, nombre: e.target.value })}
+                />
+              </div>
+            )}
+
+            {campos.includes("telefono") && (
+              <div className="field">
+                <label htmlFor="telefono">Teléfono</label>
+                <input
+                  id="telefono"
+                  type="tel"
+                  placeholder="600 000 000"
+                  value={lead.telefono}
+                  onChange={(e) => setLead({ ...lead, telefono: e.target.value })}
+                />
+              </div>
+            )}
+
+            {campos.includes("franja") && (
+              <div className="field">
+                <label htmlFor="franja">¿Cuándo prefieres que te llamemos?</label>
+                <select
+                  id="franja"
+                  value={lead.franja}
+                  onChange={(e) => setLead({ ...lead, franja: e.target.value })}
+                >
+                  <option>Mañanas</option>
+                  <option>Mediodía</option>
+                  <option>Tardes</option>
+                </select>
+              </div>
+            )}
+
+            <button className="btn" disabled={!formValido || sending} onClick={submitLead}>
+              {sending ? t.form_boton_enviando : t.form_boton}
             </button>
             <div className="again">
-              <button className="link-btn" onClick={() => setView("report")}>← Volver al informe</button>
+              <button className="link-btn" onClick={() => setView("report")}>{t.volver_informe}</button>
             </div>
           </div>
         )}
@@ -579,25 +729,29 @@ export default function LandingAura() {
         {view === "done" && (
           <div className="done">
             <div className="check">✓</div>
-            <h2>¡Listo, {lead.nombre.split(" ")[0]}!</h2>
+            <h2>{t.done_saludo}, {lead.nombre.split(" ")[0]}!</h2>
             <p>
-              Hemos enviado tu solicitud a Clínica Aura.
-              Te llamaremos por las <b>{lead.franja.toLowerCase()}</b> al{" "}
-              <b>{lead.telefono}</b> para darte cita.
+              Hemos enviado tu solicitud a {marca.nombre}.
+              {campos.includes("franja") && (
+                <> Te llamaremos por las <b>{lead.franja.toLowerCase()}</b></>
+              )}
+              {campos.includes("telefono") && (
+                <> al <b>{lead.telefono}</b></>
+              )}{" "}
+              para darte cita.
             </p>
             <div className="again" style={{ marginTop: 24 }}>
               <button className="btn ghost" style={{ width: "auto", padding: "12px 28px" }} onClick={reset}>
-                Analizar otra foto
+                {t.analizar_otra}
               </button>
             </div>
           </div>
         )}
 
         <footer>
-          Análisis orientativo generado con inteligencia artificial.
-          No constituye un diagnóstico médico.
+          {footer}
           <br />
-          Clínica Aura
+          {marca.nombre}
         </footer>
       </div>
     </div>
