@@ -9,7 +9,7 @@ import { useState, useRef, useEffect } from "react";
 // ─────────────────────────────────────────────────────────────
 
 // URL de PRODUCCIÓN del webhook de análisis (workflow "Landing IA — Análisis de piel")
-const WEBHOOK_URL = "https://TU-INSTANCIA-N8N/webhook/analisis-piel";
+const WEBHOOK_URL = "https://random-n8n.9zi4ji.easypanel.host/webhook/analisis-piel";
 
 // Opcional: webhook para notificar el lead a la clínica (WhatsApp/email/Airtable).
 // Si lo dejas vacío (""), el formulario funciona pero no envía nada.
