@@ -336,6 +336,9 @@ export default function LandingAura() {
             franja: lead.franja,
             resumen: result?.resumen || "",
             bloques: result?.bloques || [],
+            // Foto original subida por el cliente ("antes"), en base64 sin
+            // el prefijo data:image/...;base64,. n8n la adjunta como imagen.
+            foto_antes: imgB64.current || "",
             origen: `landing-${marca.nombre.toLowerCase().replace(/\s+/g, "-")}`,
             fecha: new Date().toISOString(),
           }),
