@@ -168,12 +168,11 @@ function BloqueImagenDespues({ url, etiqueta_legal }) {
   return (
     <div className="card">
       <div className="card-label">Simulación</div>
-      <img src={url} alt="Simulación del resultado" style={{ width: "100%", borderRadius: 14, display: "block" }} />
-      {etiqueta_legal && (
-        <div className="zone-obs" style={{ marginTop: 8, fontStyle: "italic" }}>
-          {etiqueta_legal}
-        </div>
-      )}
+      <div className="sim-frame">
+        <img src={url} alt="Simulación del resultado" />
+        {/* Etiqueta legal siempre visible superpuesta a la imagen, nunca oculta */}
+        {etiqueta_legal && <div className="sim-tag">{etiqueta_legal}</div>}
+      </div>
     </div>
   );
 }
@@ -283,17 +282,27 @@ export default function LandingAura() {
     setMsgIdx(0);
     setError(null);
     try {
+      const body = {
+        imagen: imgB64.current,
+        analisis: analisis,
+        bloques_activos: respuesta.bloques,
+      };
+      // Solo se incluye el campo si el cliente activo tiene imagen_despues
+      // configurada — el backend decide qué hacer según su presencia, no
+      // según que venga a null/undefined.
+      if (respuesta.imagen_despues) {
+        body.imagen_despues = {
+          prompt_edicion: respuesta.imagen_despues.prompt_edicion,
+          etiqueta_legal: respuesta.imagen_despues.etiqueta_legal,
+        };
+      }
       const response = await fetch(WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // n8n construye el prompt a partir de `analisis` y valida que
         // `bloques_activos` solo contenga tipos del catálogo fijo
         // (ver n8n-PROMPT-BUILDER.md).
-        body: JSON.stringify({
-          imagen: imgB64.current,
-          analisis: analisis,
-          bloques_activos: respuesta.bloques,
-        }),
+        body: JSON.stringify(body),
       });
       if (!response.ok) throw new Error(`Webhook respondió ${response.status}`);
       const parsed = await response.json();
@@ -524,6 +533,15 @@ export default function LandingAura() {
           margin-top: 14px; background: var(--sage-soft); border-radius: 12px;
           padding: 10px 14px; font-size: 12.5px; color: var(--ink-soft);
           text-align: center; line-height: 1.5;
+        }
+
+        .sim-frame { position: relative; border-radius: 14px; overflow: hidden; }
+        .sim-frame img { width: 100%; display: block; }
+        .sim-tag {
+          position: absolute; left: 0; right: 0; bottom: 0;
+          background: rgba(34,49,43,0.72); color: #FDFBF8;
+          font-size: 12px; font-weight: 600; padding: 10px 14px;
+          text-align: center; line-height: 1.4;
         }
 
         .cta-block {

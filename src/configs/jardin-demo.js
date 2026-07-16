@@ -43,7 +43,8 @@ export default {
       cambiar_foto: "Cambiar foto",
       boton_analizar: "Analizar mi jardín →",
       nota_privacidad: "Análisis gratuito y sin compromiso · Resultados al instante",
-      scan_sub: "Esto suele tardar unos 15 segundos",
+      // Con imagen_despues activa el análisis tarda más (~20-30s: análisis + generación de la simulación visual)
+      scan_sub: "Esto puede tardar hasta 30 segundos",
       informe_titulo: "Tu propuesta de jardín",
       analizar_otra: "Analizar otra foto",
       form_titulo: "Reserva tu visita técnica",
@@ -95,6 +96,7 @@ export default {
       "Evaluando césped y vegetación…",
       "Analizando estructuras y caminos…",
       "Calculando potencial de mejora…",
+      "Generando la propuesta visual de tu jardín…",
       "Preparando tu propuesta personalizada…",
     ],
   },
