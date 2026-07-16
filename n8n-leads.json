@@ -1,0 +1,65 @@
+{
+  "name": "Landing IA — Leads",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "landing-leads",
+        "responseMode": "onReceived",
+        "options": {
+          "allowedOrigins": "https://landing-aura-ruddy.vercel.app,https://landing-aura-mllv.vercel.app"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "d221fffa-5a87-483d-b870-814a14cbc848",
+      "name": "Webhook",
+      "webhookId": "04f4cd7e-3c64-49a1-a0d0-d2ca5ce0214f"
+    },
+    {
+      "parameters": {
+        "jsCode": "// El frontend envía: { nombre, telefono, franja, resumen, bloques, origen, fecha }\n// bloques es el array genérico {tipo, ...datos} del contrato multi-cliente\n// (puntuaciones, fortalezas, recomendaciones, checklist, propuesta,\n// horquilla_precio, imagen_despues) — distinto según qué cliente lo envíe.\n// Este nodo lo aplana a texto legible para el email, sin asumir un cliente\n// concreto ni un tipo de bloque fijo.\n\nconst body = $input.first().json.body || $input.first().json;\n\nfunction formatearBloque(b) {\n  switch (b.tipo) {\n    case 'puntuaciones':\n      return 'Puntuación por zonas:\\n' + (b.items || [])\n        .map((i) => `  - ${i.nombre}: ${i.puntuacion}/100 — ${i.observacion}`)\n        .join('\\n');\n    case 'fortalezas':\n      return 'Fortalezas:\\n' + (b.items || []).map((i) => `  - ${i}`).join('\\n');\n    case 'recomendaciones':\n      return 'Recomendaciones:\\n' + (b.items || [])\n        .map((r) => `  - ${r.titulo} (${r.zona}): ${r.beneficio}${r.detalle ? '. ' + r.detalle : ''}`)\n        .join('\\n');\n    case 'checklist':\n      return 'Checklist:\\n' + (b.items || [])\n        .map((c) => `  - [${c.estado}] ${c.nombre}${c.observacion ? ': ' + c.observacion : ''}`)\n        .join('\\n');\n    case 'propuesta':\n      return 'Propuesta:\\n' + (b.partidas || [])\n        .map((p) => `  - ${p.nombre}: ${p.descripcion}`)\n        .join('\\n');\n    case 'horquilla_precio': {\n      const rango = `${b.minimo}–${b.maximo} ${b.moneda || ''}`.trim();\n      return `Rango de precio orientativo: ${rango}${b.nota ? ' (' + b.nota + ')' : ''}`;\n    }\n    case 'imagen_despues':\n      return `Simulación visual generada: ${b.url || '(sin url todavía)'}`;\n    default:\n      return null;\n  }\n}\n\nconst bloques = Array.isArray(body.bloques) ? body.bloques : [];\nconst bloques_texto = bloques\n  .map(formatearBloque)\n  .filter(Boolean)\n  .join('\\n\\n') || '(sin bloques en el informe)';\n\nreturn [{\n  json: {\n    nombre: body.nombre || '',\n    telefono: body.telefono || '',\n    franja: body.franja || '',\n    resumen: body.resumen || '',\n    origen: body.origen || '',\n    fecha: body.fecha || '',\n    bloques_texto,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [224, 0],
+      "id": "c49d635f-eb4f-457a-84f9-0c44f2c51670",
+      "name": "Formatear informe"
+    },
+    {
+      "parameters": {
+        "sendTo": "EMAIL_DEL_NEGOCIO@cambiar.com",
+        "subject": "=Nuevo lead: {{ $json.nombre }} — {{ $json.origen }}",
+        "emailType": "text",
+        "message": "=Nuevo lead recibido desde la landing\n\nNombre: {{ $json.nombre }}\nTeléfono: {{ $json.telefono }}\nFranja horaria preferida: {{ $json.franja }}\nFecha: {{ $json.fecha }}\nOrigen: {{ $json.origen }}\n\nResumen del informe:\n{{ $json.resumen }}\n\n{{ $json.bloques_texto }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [448, 0],
+      "id": "5cd1c5a7-1b77-4d05-9c86-96fb3dc78d1a",
+      "name": "Enviar email al negocio",
+      "webhookId": "b3e2a9c1-6b7d-4f2a-9e8c-1a2b3c4d5e6f"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          { "node": "Formatear informe", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Formatear informe": {
+      "main": [
+        [
+          { "node": "Enviar email al negocio", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

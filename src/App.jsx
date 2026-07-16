@@ -20,7 +20,7 @@ const WEBHOOK_URL = "https://random-n8n.9zi4ji.easypanel.host/webhook/analisis-p
 
 // Opcional: webhook para notificar el lead a la clínica (WhatsApp/email/Airtable).
 // Si lo dejas vacío (""), el formulario funciona pero no envía nada.
-const LEAD_WEBHOOK_URL = "";
+const LEAD_WEBHOOK_URL = "https://random-n8n.9zi4ji.easypanel.host/webhook/landing-leads";
 
 const { marca, analisis, respuesta } = config;
 const { colores, hero, textos_upload: t, footer } = marca;
