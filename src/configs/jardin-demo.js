@@ -28,10 +28,10 @@ export default {
     },
 
     hero: {
-      eyebrow: "Reformas de jardín · Propuesta con IA",
+      eyebrow: "Reformas de jardín · Propuesta personalizada",
       titulo: "Descubre lo que tu jardín *necesita* en 30 segundos",
       subtitulo:
-        "Sube una foto de tu jardín o patio y nuestra IA te preparará una propuesta " +
+        "Sube una foto de tu jardín o patio y te prepararemos una propuesta " +
         "orientativa con las mejoras posibles y un rango de precio estimado.",
     },
 
@@ -96,7 +96,7 @@ export default {
       "Evaluando césped y vegetación…",
       "Analizando estructuras y caminos…",
       "Calculando potencial de mejora…",
-      "Generando la propuesta visual de tu jardín…",
+      "Preparando la propuesta visual de tu jardín…",
       "Preparando tu propuesta personalizada…",
     ],
   },

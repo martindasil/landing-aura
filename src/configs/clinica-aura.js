@@ -22,11 +22,11 @@ export default {
     },
 
     hero: {
-      eyebrow: "Medicina estética · Diagnóstico con IA",
+      eyebrow: "Medicina estética · Diagnóstico personalizado",
       // *palabra* se renderiza en cursiva y color de acento
       titulo: "Descubre lo que tu piel *necesita* en 30 segundos",
       subtitulo:
-        "Sube una foto de tu rostro y nuestra IA te preparará un informe " +
+        "Sube una foto de tu rostro y te prepararemos un informe " +
         "personalizado con el estado de tu piel y los tratamientos que mejor te irían.",
     },
 

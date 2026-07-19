@@ -636,8 +636,8 @@ export default function LandingAura() {
                   onChange={(e) => setConsent(e.target.checked)}
                 />
                 <label htmlFor="consent">
-                  Acepto que mi foto se analice con inteligencia artificial para generar
-                  un informe orientativo. La imagen se descarta tras el análisis y no se almacena.
+                  Acepto que mi foto se analice para preparar un informe orientativo.
+                  La imagen se descarta tras el análisis y no se almacena.
                   Consulta la{" "}
                   <a href="/privacidad.html" target="_blank" rel="noopener" style={{ color: "var(--sage)" }}>
                     política de privacidad
