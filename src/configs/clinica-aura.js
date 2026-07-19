@@ -85,6 +85,7 @@ export default {
   respuesta: {
     bloques: ["puntuaciones", "fortalezas", "recomendaciones"],
     imagen_despues: null,
+    lead_wall: true,
     cta: {
       titulo: "¿Quieres verlo en persona?",
       // Campo adicional no listado en el contrato mínimo, pero necesario

@@ -177,6 +177,53 @@ function BloqueImagenDespues({ url, etiqueta_legal }) {
   );
 }
 
+function LeadFormFields({ campos, lead, setLead }) {
+  return (
+    <>
+      {campos.includes("nombre") && (
+        <div className="field">
+          <label htmlFor="nombre">Nombre</label>
+          <input
+            id="nombre"
+            type="text"
+            placeholder="Tu nombre"
+            value={lead.nombre}
+            onChange={(e) => setLead({ ...lead, nombre: e.target.value })}
+          />
+        </div>
+      )}
+
+      {campos.includes("telefono") && (
+        <div className="field">
+          <label htmlFor="telefono">Teléfono</label>
+          <input
+            id="telefono"
+            type="tel"
+            placeholder="600 000 000"
+            value={lead.telefono}
+            onChange={(e) => setLead({ ...lead, telefono: e.target.value })}
+          />
+        </div>
+      )}
+
+      {campos.includes("franja") && (
+        <div className="field">
+          <label htmlFor="franja">¿Cuándo prefieres que te llamemos?</label>
+          <select
+            id="franja"
+            value={lead.franja}
+            onChange={(e) => setLead({ ...lead, franja: e.target.value })}
+          >
+            <option>Mañanas</option>
+            <option>Mediodía</option>
+            <option>Tardes</option>
+          </select>
+        </div>
+      )}
+    </>
+  );
+}
+
 function renderBloque(bloque, i, barsOn) {
   switch (bloque.tipo) {
     case "puntuaciones":
@@ -216,8 +263,11 @@ export default function LandingAura() {
   const [sending, setSending] = useState(false);
   const [lead, setLead] = useState({ nombre: "", telefono: "", franja: "Mañanas" });
   const [barsOn, setBarsOn] = useState(false);
+  const [leadWallUnlocked, setLeadWallUnlocked] = useState(false);
   const fileRef = useRef(null);
   const imgB64 = useRef(null);
+
+  const leadWallActive = !!respuesta.lead_wall;
 
   const mensajesCarga = analisis.mensajes_carga?.length
     ? analisis.mensajes_carga
@@ -349,7 +399,11 @@ export default function LandingAura() {
       }
     }
     setSending(false);
-    setView("done");
+    if (leadWallActive) {
+      setLeadWallUnlocked(true);
+    } else {
+      setView("done");
+    }
   };
 
   const reset = () => {
@@ -360,6 +414,7 @@ export default function LandingAura() {
     setConsent(false);
     setError(null);
     setLead({ nombre: "", telefono: "", franja: "Mañanas" });
+    setLeadWallUnlocked(false);
   };
 
   const campos = respuesta.cta.campos;
@@ -538,6 +593,25 @@ export default function LandingAura() {
           text-align: center; line-height: 1.5;
         }
 
+        .lockwrap { position: relative; }
+        .lock-blur { filter: blur(9px); pointer-events: none; user-select: none; }
+        .lock-overlay {
+          position: absolute; inset: 0; z-index: 2;
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
+          gap: 12px; text-align: center; padding: 24px;
+        }
+        .lock-icon {
+          width: 56px; height: 56px; border-radius: 50%;
+          background: var(--card); border: 1px solid var(--line);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 24px; box-shadow: 0 4px 20px rgba(34,49,43,0.15);
+        }
+        .lock-msg {
+          font-family: 'Fraunces', serif; font-size: 17px; font-weight: 500; color: var(--ink);
+          max-width: 260px; background: var(--card); padding: 10px 18px; border-radius: 14px;
+          border: 1px solid var(--line); box-shadow: 0 4px 20px rgba(34,49,43,0.1);
+        }
+
         .sim-frame { position: relative; border-radius: 14px; overflow: hidden; }
         .sim-frame img { width: 100%; display: block; }
         .sim-tag {
@@ -676,15 +750,43 @@ export default function LandingAura() {
               <p>{result.resumen}</p>
             </div>
 
-            {result.bloques?.map((b, i) => renderBloque(b, i, barsOn))}
+            {leadWallActive && !leadWallUnlocked ? (
+              <div className="lockwrap">
+                <div className="lock-blur">
+                  {result.bloques?.map((b, i) => renderBloque(b, i, barsOn))}
+                </div>
+                <div className="lock-overlay">
+                  <div className="lock-icon">🔒</div>
+                  <div className="lock-msg">Deja tus datos para ver tu informe completo</div>
+                </div>
+              </div>
+            ) : (
+              result.bloques?.map((b, i) => renderBloque(b, i, barsOn))
+            )}
 
-            <div className="cta-block">
-              <h3>{respuesta.cta.titulo}</h3>
-              <p>{respuesta.cta.texto}</p>
-              <button className="btn" onClick={() => setView("form")}>
-                {respuesta.cta.texto_boton}
-              </button>
-            </div>
+            {leadWallActive && !leadWallUnlocked && (
+              <div className="card form-card">
+                <h2>{t.form_titulo}</h2>
+                <p className="lead-sub">{t.form_subtitulo}</p>
+                <LeadFormFields campos={campos} lead={lead} setLead={setLead} />
+                <button className="btn" disabled={!formValido || sending} onClick={submitLead}>
+                  {sending ? t.form_boton_enviando : t.form_boton}
+                </button>
+              </div>
+            )}
+
+            {(!leadWallActive || leadWallUnlocked) && (
+              <div className="cta-block">
+                <h3>{respuesta.cta.titulo}</h3>
+                <p>{respuesta.cta.texto}</p>
+                <button
+                  className="btn"
+                  onClick={() => (leadWallActive ? setView("done") : setView("form"))}
+                >
+                  {respuesta.cta.texto_boton}
+                </button>
+              </div>
+            )}
 
             <div className="again">
               <button className="link-btn" onClick={reset}>{t.analizar_otra}</button>
@@ -696,48 +798,7 @@ export default function LandingAura() {
           <div className="card form-card">
             <h2>{t.form_titulo}</h2>
             <p className="lead-sub">{t.form_subtitulo}</p>
-
-            {campos.includes("nombre") && (
-              <div className="field">
-                <label htmlFor="nombre">Nombre</label>
-                <input
-                  id="nombre"
-                  type="text"
-                  placeholder="Tu nombre"
-                  value={lead.nombre}
-                  onChange={(e) => setLead({ ...lead, nombre: e.target.value })}
-                />
-              </div>
-            )}
-
-            {campos.includes("telefono") && (
-              <div className="field">
-                <label htmlFor="telefono">Teléfono</label>
-                <input
-                  id="telefono"
-                  type="tel"
-                  placeholder="600 000 000"
-                  value={lead.telefono}
-                  onChange={(e) => setLead({ ...lead, telefono: e.target.value })}
-                />
-              </div>
-            )}
-
-            {campos.includes("franja") && (
-              <div className="field">
-                <label htmlFor="franja">¿Cuándo prefieres que te llamemos?</label>
-                <select
-                  id="franja"
-                  value={lead.franja}
-                  onChange={(e) => setLead({ ...lead, franja: e.target.value })}
-                >
-                  <option>Mañanas</option>
-                  <option>Mediodía</option>
-                  <option>Tardes</option>
-                </select>
-              </div>
-            )}
-
+            <LeadFormFields campos={campos} lead={lead} setLead={setLead} />
             <button className="btn" disabled={!formValido || sending} onClick={submitLead}>
               {sending ? t.form_boton_enviando : t.form_boton}
             </button>

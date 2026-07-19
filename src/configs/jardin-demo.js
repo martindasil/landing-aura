@@ -112,6 +112,7 @@ export default {
         "una ubicación distinta ni cambies el ángulo de cámara.",
       etiqueta_legal: "Simulación ilustrativa — el resultado real puede variar",
     },
+    lead_wall: true,
     cta: {
       titulo: "¿Quieres un presupuesto exacto?",
       texto:
