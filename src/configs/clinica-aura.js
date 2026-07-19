@@ -4,6 +4,10 @@
 // ─────────────────────────────────────────────────────────────
 
 export default {
+  // "camara": captura en vivo con la cámara frontal (getUserMedia).
+  // "galeria": selector de archivo tradicional.
+  captura: "camara",
+
   marca: {
     nombre: "Clínica Aura",
 
@@ -36,7 +40,7 @@ export default {
       dropzone_titulo: "Sube tu foto o hazte un selfie",
       dropzone_hint: "De frente, con buena luz y sin maquillaje si es posible",
       preview_titulo: "Foto lista para analizar",
-      preview_nota: "Se procesa de forma segura y no se almacena.",
+      preview_nota: "Tu foto se analiza al momento y no se almacena en ningún servidor.",
       cambiar_foto: "Cambiar foto",
       boton_analizar: "Analizar mi piel →",
       nota_privacidad: "Análisis gratuito y sin compromiso · Resultados al instante",

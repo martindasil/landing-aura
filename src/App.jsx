@@ -22,8 +22,9 @@ const WEBHOOK_URL = "https://random-n8n.9zi4ji.easypanel.host/webhook/analisis-p
 // Si lo dejas vacío (""), el formulario funciona pero no envía nada.
 const LEAD_WEBHOOK_URL = "https://random-n8n.9zi4ji.easypanel.host/webhook/landing-leads";
 
-const { marca, analisis, respuesta } = config;
+const { marca, analisis, respuesta, captura } = config;
 const { colores, hero, textos_upload: t, footer } = marca;
+const capturaModo = captura === "camara" ? "camara" : "galeria";
 
 // Convierte "texto *destacado*" en JSX con <em> en la parte marcada
 function renderEmphasis(text) {
@@ -173,6 +174,122 @@ function BloqueImagenDespues({ url, etiqueta_legal }) {
         {/* Etiqueta legal siempre visible superpuesta a la imagen, nunca oculta */}
         {etiqueta_legal && <div className="sim-tag">{etiqueta_legal}</div>}
       </div>
+    </div>
+  );
+}
+
+const TEXTO_CONFIANZA_CAMARA =
+  "Tu foto se analiza al momento y no se almacena en ningún servidor.";
+
+// Captura por cámara frontal en vivo (getUserMedia). Si el permiso se deniega
+// o no hay cámara disponible, ofrece reintentar o, como último recurso,
+// subir una foto desde la galería (mejor un lead con foto que ningún lead).
+function CameraCapture({ onFile }) {
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const fallbackFileRef = useRef(null);
+  const [status, setStatus] = useState("starting"); // starting | live | captured | error
+  const [shot, setShot] = useState(null);
+
+  const stopStream = () => {
+    streamRef.current?.getTracks().forEach((tr) => tr.stop());
+    streamRef.current = null;
+  };
+
+  const startCamera = async () => {
+    setStatus("starting");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setStatus("live");
+    } catch (e) {
+      setStatus("error");
+    }
+  };
+
+  useEffect(() => {
+    startCamera();
+    return stopStream;
+  }, []);
+
+  const capture = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0);
+    setShot(canvas.toDataURL("image/jpeg", 0.9));
+    setStatus("captured");
+  };
+
+  const retake = () => setStatus("live");
+
+  const usePhoto = async () => {
+    const blob = await (await fetch(shot)).blob();
+    stopStream();
+    onFile(new File([blob], "captura.jpg", { type: "image/jpeg" }));
+  };
+
+  if (status === "error") {
+    return (
+      <div className="camera-error">
+        <div className="camera-error-msg">
+          No hemos podido acceder a tu cámara. Revisa los permisos del navegador
+          o sube una foto desde tu galería.
+        </div>
+        <button className="btn ghost" onClick={startCamera}>Reintentar cámara</button>
+        <button
+          className="link-btn"
+          style={{ display: "block", margin: "14px auto 0" }}
+          onClick={() => fallbackFileRef.current?.click()}
+        >
+          Subir foto desde galería
+        </button>
+        <input
+          ref={fallbackFileRef}
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="camera-wrap">
+      <div className="camera-frame">
+        {status === "captured" ? (
+          <img src={shot} alt="Foto capturada" />
+        ) : (
+          <video ref={videoRef} playsInline muted autoPlay />
+        )}
+        {status !== "captured" && (
+          <>
+            <div className="camera-oval" />
+            <div className="camera-guide">Centra tu rostro en el marco, con buena luz</div>
+          </>
+        )}
+      </div>
+      <div className="camera-trust">{TEXTO_CONFIANZA_CAMARA}</div>
+      {status === "captured" ? (
+        <div className="camera-actions">
+          <button className="btn ghost" onClick={retake}>Repetir</button>
+          <button className="btn" onClick={usePhoto}>Usar esta foto</button>
+        </div>
+      ) : (
+        <button className="btn" disabled={status !== "live"} onClick={capture}>
+          {status === "starting" ? "Activando cámara…" : "Capturar foto"}
+        </button>
+      )}
     </div>
   );
 }
@@ -493,6 +610,34 @@ export default function LandingAura() {
         .preview .meta { flex: 1; text-align: left; }
         .preview .meta b { display: block; font-size: 14px; margin-bottom: 2px; }
         .preview .meta span { font-size: 13px; color: var(--ink-soft); }
+
+        .camera-wrap { text-align: center; }
+        .camera-frame {
+          position: relative; width: 100%; max-width: 320px; aspect-ratio: 3 / 4;
+          margin: 0 auto; border-radius: 18px; overflow: hidden;
+          background: #14201A; border: 1px solid var(--line);
+        }
+        .camera-frame video, .camera-frame img {
+          width: 100%; height: 100%; object-fit: cover; display: block; transform: scaleX(-1);
+        }
+        .camera-oval {
+          position: absolute; inset: 9% 15%; border-radius: 50% / 58%;
+          border: 3px solid rgba(253,251,248,0.85);
+          box-shadow: 0 0 0 2000px rgba(20,32,26,0.32);
+          pointer-events: none;
+        }
+        .camera-guide {
+          position: absolute; left: 0; right: 0; bottom: 0;
+          background: rgba(20,32,26,0.72); color: #FDFBF8;
+          font-size: 12.5px; font-weight: 600; padding: 10px 14px;
+          text-align: center; line-height: 1.4;
+        }
+        .camera-trust { font-size: 12px; color: var(--ink-soft); margin: 12px 0 4px; line-height: 1.5; }
+        .camera-actions { display: flex; gap: 12px; margin-top: 14px; }
+        .camera-actions .btn { margin-top: 0; width: auto; flex: 1; }
+        .camera-wrap > .btn { max-width: 320px; }
+        .camera-error { text-align: center; padding: 12px 0; }
+        .camera-error-msg { font-size: 13.5px; color: var(--ink-soft); margin-bottom: 16px; line-height: 1.5; }
         .link-btn {
           background: none; border: none; color: var(--sage); font-size: 13px;
           font-weight: 600; cursor: pointer; text-decoration: underline; padding: 0;
@@ -673,11 +818,15 @@ export default function LandingAura() {
 
             <div className="uploader">
               {!photo ? (
-                <div className="dropzone" onClick={() => fileRef.current?.click()}>
-                  <div className="dz-icon">✦</div>
-                  <div className="dz-title">{t.dropzone_titulo}</div>
-                  <div className="dz-hint">{t.dropzone_hint}</div>
-                </div>
+                capturaModo === "camara" ? (
+                  <CameraCapture onFile={onFile} />
+                ) : (
+                  <div className="dropzone" onClick={() => fileRef.current?.click()}>
+                    <div className="dz-icon">✦</div>
+                    <div className="dz-title">{t.dropzone_titulo}</div>
+                    <div className="dz-hint">{t.dropzone_hint}</div>
+                  </div>
+                )
               ) : (
                 <div className="preview">
                   <img src={photo} alt="Tu foto" />
@@ -685,7 +834,12 @@ export default function LandingAura() {
                     <b>{t.preview_titulo}</b>
                     <span>{t.preview_nota}</span>
                     <div style={{ marginTop: 6 }}>
-                      <button className="link-btn" onClick={() => fileRef.current?.click()}>
+                      <button
+                        className="link-btn"
+                        onClick={() =>
+                          capturaModo === "camara" ? setPhoto(null) : fileRef.current?.click()
+                        }
+                      >
                         {t.cambiar_foto}
                       </button>
                     </div>
@@ -693,14 +847,16 @@ export default function LandingAura() {
                 </div>
               )}
 
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                capture="user"
-                style={{ display: "none" }}
-                onChange={(e) => onFile(e.target.files?.[0])}
-              />
+              {capturaModo === "galeria" && (
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  capture="user"
+                  style={{ display: "none" }}
+                  onChange={(e) => onFile(e.target.files?.[0])}
+                />
+              )}
 
               <div className="consent">
                 <input

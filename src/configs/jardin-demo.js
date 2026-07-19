@@ -7,6 +7,10 @@
 // ─────────────────────────────────────────────────────────────
 
 export default {
+  // "camara": captura en vivo con la cámara frontal (getUserMedia).
+  // "galeria": selector de archivo tradicional (se mantiene como está).
+  captura: "galeria",
+
   marca: {
     nombre: "Jardín Demo",
 
@@ -39,7 +43,7 @@ export default {
       dropzone_titulo: "Sube una foto de tu jardín o patio",
       dropzone_hint: "A plena luz del día y mostrando el espacio completo si es posible",
       preview_titulo: "Foto lista para analizar",
-      preview_nota: "Se procesa de forma segura y no se almacena.",
+      preview_nota: "Tu foto se analiza al momento y no se almacena en ningún servidor.",
       cambiar_foto: "Cambiar foto",
       boton_analizar: "Analizar mi jardín →",
       nota_privacidad: "Análisis gratuito y sin compromiso · Resultados al instante",
