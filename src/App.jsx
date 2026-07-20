@@ -203,10 +203,20 @@ function CameraCapture({ onFile }) {
         video: { facingMode: "user" },
         audio: false,
       });
+      // Detiene un stream anterior si lo hubiera (p. ej. doble invocación
+      // de efectos en desarrollo con StrictMode) para no dejarlo abierto.
+      stopStream();
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          // Asignar srcObject de nuevo (p. ej. la segunda invocación de
+          // StrictMode) aborta el play() anterior con AbortError: no es
+          // un fallo real de la cámara, se puede ignorar.
+          if (playErr?.name !== "AbortError") throw playErr;
+        }
       }
       setStatus("live");
     } catch (e) {
