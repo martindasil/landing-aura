@@ -123,7 +123,7 @@ export default {
         "Reserva una visita técnica gratuita con nuestro equipo. " +
         "Confirmaremos la propuesta y el precio final in situ, sin compromiso.",
       texto_boton: "Quiero mi presupuesto gratuito",
-      campos: ["nombre", "telefono", "franja"],
+      campos: ["nombre", "email", "telefono", "franja"],
     },
   },
 };

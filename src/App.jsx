@@ -34,6 +34,8 @@ function renderEmphasis(text) {
 
 const scoreTone = (n) => (n >= 75 ? "var(--sage)" : n >= 55 ? "var(--amber)" : "var(--clay)");
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 // ── Renderizadores de bloque (result.bloques[].tipo) ──────────
 // Catálogo fijo definido en el contrato de respuesta de la IA.
 // Cualquier tipo no reconocido se ignora (defensa ante payloads manipulados).
@@ -320,6 +322,19 @@ function LeadFormFields({ campos, lead, setLead }) {
         </div>
       )}
 
+      {campos.includes("email") && (
+        <div className="field">
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            placeholder="tu@email.com"
+            value={lead.email}
+            onChange={(e) => setLead({ ...lead, email: e.target.value })}
+          />
+        </div>
+      )}
+
       {campos.includes("telefono") && (
         <div className="field">
           <label htmlFor="telefono">Teléfono</label>
@@ -388,7 +403,7 @@ export default function LandingAura() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [sending, setSending] = useState(false);
-  const [lead, setLead] = useState({ nombre: "", telefono: "", franja: "Mañanas" });
+  const [lead, setLead] = useState({ nombre: "", telefono: "", email: "", franja: "Mañanas" });
   const [barsOn, setBarsOn] = useState(false);
   const [leadWallUnlocked, setLeadWallUnlocked] = useState(false);
   const fileRef = useRef(null);
@@ -499,6 +514,7 @@ export default function LandingAura() {
   const submitLead = async () => {
     const campos = respuesta.cta.campos;
     if (campos.includes("nombre") && !lead.nombre.trim()) return;
+    if (campos.includes("email") && !EMAIL_RE.test(lead.email.trim())) return;
     if (campos.includes("telefono") && lead.telefono.trim().length < 9) return;
     if (sending) return;
     setSending(true);
@@ -509,6 +525,7 @@ export default function LandingAura() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             nombre: lead.nombre.trim(),
+            email: lead.email.trim(),
             telefono: lead.telefono.trim(),
             franja: lead.franja,
             resumen: result?.resumen || "",
@@ -540,13 +557,14 @@ export default function LandingAura() {
     setResult(null);
     setConsent(false);
     setError(null);
-    setLead({ nombre: "", telefono: "", franja: "Mañanas" });
+    setLead({ nombre: "", telefono: "", email: "", franja: "Mañanas" });
     setLeadWallUnlocked(false);
   };
 
   const campos = respuesta.cta.campos;
   const formValido =
     (!campos.includes("nombre") || lead.nombre.trim()) &&
+    (!campos.includes("email") || EMAIL_RE.test(lead.email.trim())) &&
     (!campos.includes("telefono") || lead.telefono.trim().length >= 9);
 
   return (
@@ -923,7 +941,9 @@ export default function LandingAura() {
                 </div>
                 <div className="lock-overlay">
                   <div className="lock-icon">🔒</div>
-                  <div className="lock-msg">Deja tus datos para ver tu informe completo</div>
+                  <div className="lock-msg">
+                    Deja tus datos para ver tu informe completo en la web y recibirlo por email
+                  </div>
                 </div>
               </div>
             ) : (
@@ -938,6 +958,9 @@ export default function LandingAura() {
                 <button className="btn" disabled={!formValido || sending} onClick={submitLead}>
                   {sending ? t.form_boton_enviando : t.form_boton}
                 </button>
+                {campos.includes("email") && (
+                  <p className="privacy-note">Te enviaremos tu informe completo a este email.</p>
+                )}
               </div>
             )}
 
@@ -968,6 +991,9 @@ export default function LandingAura() {
             <button className="btn" disabled={!formValido || sending} onClick={submitLead}>
               {sending ? t.form_boton_enviando : t.form_boton}
             </button>
+            {campos.includes("email") && (
+              <p className="privacy-note">Te enviaremos tu informe completo a este email.</p>
+            )}
             <div className="again">
               <button className="link-btn" onClick={() => setView("report")}>{t.volver_informe}</button>
             </div>

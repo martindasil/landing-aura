@@ -98,7 +98,7 @@ export default {
         "Reserva una valoración gratuita con nuestro equipo médico. " +
         "Revisaremos tu informe contigo, sin compromiso.",
       texto_boton: "Quiero mi valoración gratuita",
-      campos: ["nombre", "telefono", "franja"],
+      campos: ["nombre", "email", "telefono", "franja"],
     },
   },
 };
