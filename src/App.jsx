@@ -183,19 +183,78 @@ function BloqueImagenDespues({ url, etiqueta_legal }) {
 const TEXTO_CONFIANZA_CAMARA =
   "Tu foto se analiza al momento y no se almacena en ningún servidor.";
 
-// Captura por cámara frontal en vivo (getUserMedia). Si el permiso se deniega
-// o no hay cámara disponible, ofrece reintentar o, como último recurso,
-// subir una foto desde la galería (mejor un lead con foto que ningún lead).
+// URLs de los assets estáticos del motor de detección facial de MediaPipe
+// (runtime WASM + modelo .tflite). Solo se piden una vez, al montar el
+// componente de cámara, y son exactamente los mismos assets públicos que
+// sirve MediaPipe para cualquier web: no dependen del usuario ni de su foto.
+const MEDIAPIPE_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
+const MEDIAPIPE_MODEL_URL =
+  "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite";
+
+const AUTOCAPTURE_ESTABLE_MS = 1500;
+const DETECCION_INTERVALO_MS = 150;
+
+// Clasifica el recuadro de rostro que devuelve MediaPipe contra la zona del
+// óvalo guía (centro del encuadre). Todo esto ocurre con los números que ya
+// están en memoria del navegador; no se compara nada contra un servidor.
+function clasificarRostro(box, video) {
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  if (!vw || !vh) return { tono: "none" };
+  const cx = (box.originX + box.width / 2) / vw;
+  const cy = (box.originY + box.height / 2) / vh;
+  const wRatio = box.width / vw;
+
+  if (wRatio < 0.22) return { tono: "off", razon: "lejos" };
+  if (wRatio > 0.72) return { tono: "off", razon: "cerca" };
+  if (cx < 0.3 || cx > 0.7 || cy < 0.22 || cy > 0.78) return { tono: "off", razon: "descentrado" };
+  return { tono: "centered" };
+}
+
+// Captura por cámara frontal en vivo (getUserMedia) con detección real de
+// rostro vía MediaPipe Face Detection, corriendo enteramente en el navegador
+// (WebAssembly, on-device). El vídeo, los recuadros detectados y cualquier
+// coordenada derivada NUNCA salen del navegador: no hay ningún fetch/POST
+// con esos datos en este componente. Las únicas peticiones de red que hace
+// son las de MEDIAPIPE_WASM_URL / MEDIAPIPE_MODEL_URL (assets estáticos del
+// motor, no datos del usuario) y ocurren una sola vez al montar.
+//
+// Si el permiso de cámara se deniega, no hay cámara, o MediaPipe no carga
+// (red, dispositivo sin WebAssembly/GPU), se degrada a captura manual: el
+// óvalo se queda neutro y el usuario dispara la foto con el botón, igual
+// que en la versión sin detección. Como último recurso, se ofrece subir
+// una foto desde la galería (mejor un lead con foto que ningún lead).
 function CameraCapture({ onFile }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const fallbackFileRef = useRef(null);
+  const detectorRef = useRef(null);
+  const stableSinceRef = useRef(null);
+  const lastDetectAtRef = useRef(0);
+  const countdownActiveRef = useRef(false);
+  const countdownTimeoutsRef = useRef([]);
+
   const [status, setStatus] = useState("starting"); // starting | live | captured | error
   const [shot, setShot] = useState(null);
+  const [detection, setDetection] = useState("loading"); // loading | unsupported | none | off | centered
+  const [offReason, setOffReason] = useState(null); // lejos | cerca | descentrado
+  const [countdown, setCountdown] = useState(null); // null | 3 | 2 | 1
 
   const stopStream = () => {
     streamRef.current?.getTracks().forEach((tr) => tr.stop());
     streamRef.current = null;
+  };
+
+  const clearCountdownTimeouts = () => {
+    countdownTimeoutsRef.current.forEach(clearTimeout);
+    countdownTimeoutsRef.current = [];
+  };
+
+  const cancelCountdown = () => {
+    if (!countdownActiveRef.current) return;
+    countdownActiveRef.current = false;
+    clearCountdownTimeouts();
+    setCountdown(null);
   };
 
   const startCamera = async () => {
@@ -228,10 +287,52 @@ function CameraCapture({ onFile }) {
 
   useEffect(() => {
     startCamera();
-    return stopStream;
+    return () => {
+      stopStream();
+      clearCountdownTimeouts();
+    };
+  }, []);
+
+  // Carga (una vez) el detector facial de MediaPipe. Si falla por cualquier
+  // motivo, "unsupported" hace que el resto del componente se comporte
+  // exactamente como la captura manual original, sin romper el flujo.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { FaceDetector, FilesetResolver } = await import("@mediapipe/tasks-vision");
+        const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
+        const baseOptions = (delegate) => ({
+          baseOptions: { modelAssetPath: MEDIAPIPE_MODEL_URL, delegate },
+          runningMode: "VIDEO",
+        });
+        let detector;
+        try {
+          detector = await FaceDetector.createFromOptions(vision, baseOptions("GPU"));
+        } catch {
+          // Algunos dispositivos/navegadores no exponen delegate GPU vía WebGL;
+          // se reintenta en CPU antes de darnos por vencidos.
+          detector = await FaceDetector.createFromOptions(vision, baseOptions("CPU"));
+        }
+        if (cancelled) {
+          detector.close();
+          return;
+        }
+        detectorRef.current = detector;
+        setDetection("none");
+      } catch (e) {
+        if (!cancelled) setDetection("unsupported");
+      }
+    })();
+    return () => {
+      cancelled = true;
+      detectorRef.current?.close();
+      detectorRef.current = null;
+    };
   }, []);
 
   const capture = () => {
+    cancelCountdown();
     const video = videoRef.current;
     if (!video) return;
     const canvas = document.createElement("canvas");
@@ -242,7 +343,85 @@ function CameraCapture({ onFile }) {
     setStatus("captured");
   };
 
-  const retake = () => setStatus("live");
+  const startCountdown = () => {
+    countdownActiveRef.current = true;
+    setCountdown(3);
+    countdownTimeoutsRef.current = [
+      setTimeout(() => countdownActiveRef.current && setCountdown(2), 700),
+      setTimeout(() => countdownActiveRef.current && setCountdown(1), 1400),
+      setTimeout(() => {
+        if (!countdownActiveRef.current) return;
+        countdownActiveRef.current = false;
+        setCountdown(null);
+        capture();
+      }, 2100),
+    ];
+  };
+
+  // Se llama en cada ciclo de detección con el resultado real de MediaPipe:
+  // el óvalo y el texto guía, y el disparo del autocaptura, dependen solo de
+  // esto — nunca de un temporizador ciego.
+  const evaluateDetection = (result, video) => {
+    const box = result?.detections?.[0]?.boundingBox;
+    if (!box) {
+      stableSinceRef.current = null;
+      cancelCountdown();
+      setDetection((prev) => (prev === "none" ? prev : "none"));
+      setOffReason(null);
+      return;
+    }
+
+    const { tono, razon } = clasificarRostro(box, video);
+
+    if (tono !== "centered") {
+      stableSinceRef.current = null;
+      cancelCountdown();
+      setDetection((prev) => (prev === "off" ? prev : "off"));
+      setOffReason(razon);
+      return;
+    }
+
+    setOffReason(null);
+    setDetection((prev) => (prev === "centered" ? prev : "centered"));
+    if (stableSinceRef.current == null) stableSinceRef.current = performance.now();
+    const elapsed = performance.now() - stableSinceRef.current;
+    if (elapsed >= AUTOCAPTURE_ESTABLE_MS && !countdownActiveRef.current) {
+      startCountdown();
+    }
+  };
+
+  // Bucle de detección sobre la vista en vivo. Se apoya en refs (no en
+  // estado de React) para leer siempre el detector/último frame al día,
+  // así no hay que reiniciar el bucle cada vez que cambia el estado visual.
+  useEffect(() => {
+    if (status !== "live") return;
+    let raf;
+    const loop = () => {
+      const video = videoRef.current;
+      const detector = detectorRef.current;
+      const now = performance.now();
+      if (video && detector && video.readyState >= 2 && now - lastDetectAtRef.current >= DETECCION_INTERVALO_MS) {
+        lastDetectAtRef.current = now;
+        try {
+          evaluateDetection(detector.detectForVideo(video, now), video);
+        } catch (e) {
+          // Frame puntual no procesable (p. ej. justo tras un resize); se
+          // reintenta en el siguiente ciclo sin interrumpir la cámara.
+        }
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [status]);
+
+  const retake = () => {
+    stableSinceRef.current = null;
+    cancelCountdown();
+    setDetection((prev) => (prev === "unsupported" || prev === "loading" ? prev : "none"));
+    setOffReason(null);
+    setStatus("live");
+  };
 
   const usePhoto = async () => {
     const blob = await (await fetch(shot)).blob();
@@ -276,6 +455,20 @@ function CameraCapture({ onFile }) {
     );
   }
 
+  const ovalTono = detection === "off" ? "tone-off" : detection === "centered" ? "tone-centered" : "";
+
+  let guideText = "Centra tu rostro en el marco, con buena luz";
+  if (status === "live") {
+    if (detection === "loading") guideText = "Cargando el escaneo…";
+    else if (detection === "none") guideText = "No detectamos tu rostro. Colócate frente a la cámara.";
+    else if (detection === "off") {
+      guideText =
+        offReason === "lejos" ? "Acércate un poco" : offReason === "cerca" ? "Aléjate un poco" : "Céntrate en el óvalo";
+    } else if (detection === "centered") {
+      guideText = countdown != null ? "¡Perfecto, no te muevas!" : "Rostro centrado, manteniendo…";
+    }
+  }
+
   return (
     <div className="camera-wrap">
       <div className="camera-frame">
@@ -286,8 +479,9 @@ function CameraCapture({ onFile }) {
         )}
         {status !== "captured" && (
           <>
-            <div className="camera-oval" />
-            <div className="camera-guide">Centra tu rostro en el marco, con buena luz</div>
+            <div className={`camera-oval ${ovalTono}`} />
+            {countdown != null && <div className="camera-countdown">{countdown}</div>}
+            <div className="camera-guide">{guideText}</div>
           </>
         )}
       </div>
@@ -653,6 +847,20 @@ export default function LandingAura() {
           border: 3px solid rgba(253,251,248,0.85);
           box-shadow: 0 0 0 2000px rgba(20,32,26,0.32);
           pointer-events: none;
+          transition: border-color .25s, box-shadow .25s;
+        }
+        .camera-oval.tone-off {
+          border-color: var(--amber);
+          box-shadow: 0 0 0 2000px rgba(20,32,26,0.32), 0 0 22px rgba(200,154,75,0.45);
+        }
+        .camera-oval.tone-centered {
+          border-color: var(--sage);
+          box-shadow: 0 0 0 2000px rgba(20,32,26,0.32), 0 0 26px rgba(111,191,166,0.6);
+        }
+        .camera-countdown {
+          position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+          font-family: 'Fraunces', serif; font-weight: 600; font-size: 64px; color: #FDFBF8;
+          text-shadow: 0 2px 16px rgba(0,0,0,0.55); pointer-events: none;
         }
         .camera-guide {
           position: absolute; left: 0; right: 0; bottom: 0;
