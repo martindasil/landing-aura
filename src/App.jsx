@@ -768,21 +768,27 @@ export default function LandingAura() {
 
         .lockwrap { position: relative; }
         .lock-blur { filter: blur(9px); pointer-events: none; user-select: none; }
-        .lock-overlay {
-          position: absolute; inset: 0; z-index: 2;
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          gap: 12px; text-align: center; padding: 24px;
+
+        .leadwall-modal-backdrop {
+          position: fixed; inset: 0; z-index: 50;
+          background: rgba(20,32,26,0.55);
+          display: flex; align-items: flex-start; justify-content: center;
+          padding: 40px 16px; overflow-y: auto;
+        }
+        .leadwall-modal {
+          background: var(--card); border-radius: 20px; border: 1px solid var(--line);
+          box-shadow: 0 20px 60px rgba(0,0,0,0.28);
+          padding: 30px 26px; max-width: 420px; width: 100%; margin: auto 0;
         }
         .lock-icon {
           width: 56px; height: 56px; border-radius: 50%;
-          background: var(--card); border: 1px solid var(--line);
+          background: var(--sage-soft); color: var(--sage);
           display: flex; align-items: center; justify-content: center;
-          font-size: 24px; box-shadow: 0 4px 20px rgba(34,49,43,0.15);
+          font-size: 24px; margin: 0 auto 16px;
         }
         .lock-msg {
-          font-family: 'Fraunces', serif; font-size: 17px; font-weight: 500; color: var(--ink);
-          max-width: 260px; background: var(--card); padding: 10px 18px; border-radius: 14px;
-          border: 1px solid var(--line); box-shadow: 0 4px 20px rgba(34,49,43,0.1);
+          font-family: 'Fraunces', serif; font-size: 19px; font-weight: 500; color: var(--ink);
+          text-align: center; margin-bottom: 22px; line-height: 1.4;
         }
 
         .sim-frame { position: relative; border-radius: 14px; overflow: hidden; }
@@ -939,28 +945,24 @@ export default function LandingAura() {
                 <div className="lock-blur">
                   {result.bloques?.map((b, i) => renderBloque(b, i, barsOn))}
                 </div>
-                <div className="lock-overlay">
-                  <div className="lock-icon">🔒</div>
-                  <div className="lock-msg">
-                    Deja tus datos para ver tu informe completo en la web y recibirlo por email
-                  </div>
-                </div>
               </div>
             ) : (
               result.bloques?.map((b, i) => renderBloque(b, i, barsOn))
             )}
 
             {leadWallActive && !leadWallUnlocked && (
-              <div className="card form-card">
-                <h2>{t.form_titulo}</h2>
-                <p className="lead-sub">{t.form_subtitulo}</p>
-                <LeadFormFields campos={campos} lead={lead} setLead={setLead} />
-                <button className="btn" disabled={!formValido || sending} onClick={submitLead}>
-                  {sending ? t.form_boton_enviando : t.form_boton}
-                </button>
-                {campos.includes("email") && (
-                  <p className="privacy-note">Te enviaremos tu informe completo a este email.</p>
-                )}
+              <div className="leadwall-modal-backdrop">
+                <div className="leadwall-modal">
+                  <div className="lock-icon">🔒</div>
+                  <div className="lock-msg">Deja tus datos para ver tu informe completo</div>
+                  <LeadFormFields campos={campos} lead={lead} setLead={setLead} />
+                  <button className="btn" disabled={!formValido || sending} onClick={submitLead}>
+                    {sending ? t.form_boton_enviando : t.form_boton}
+                  </button>
+                  {campos.includes("email") && (
+                    <p className="privacy-note">Te enviaremos tu informe completo a este email.</p>
+                  )}
+                </div>
               </div>
             )}
 
