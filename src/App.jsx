@@ -197,13 +197,28 @@ const DETECCION_INTERVALO_MS = 150;
 // Clasifica el recuadro de rostro que devuelve MediaPipe contra la zona del
 // óvalo guía (centro del encuadre). Todo esto ocurre con los números que ya
 // están en memoria del navegador; no se compara nada contra un servidor.
+//
+// El vídeo "crudo" de la cámara (normalmente 16:9 o 4:3) no tiene el mismo
+// encuadre que el recuadro 3:4 en pantalla: se pinta con object-fit:cover,
+// que recorta los bordes sobrantes. MediaPipe devuelve las coordenadas del
+// rostro en el sistema de coordenadas del vídeo crudo, así que hay que
+// convertirlas al recorte visible antes de compararlas contra el óvalo —
+// si no, casi cualquier posición del rostro sale "centrada".
 function clasificarRostro(box, video) {
   const vw = video.videoWidth;
   const vh = video.videoHeight;
-  if (!vw || !vh) return { tono: "none" };
-  const cx = (box.originX + box.width / 2) / vw;
-  const cy = (box.originY + box.height / 2) / vh;
-  const wRatio = box.width / vw;
+  const rect = video.getBoundingClientRect();
+  if (!vw || !vh || !rect.width || !rect.height) return { tono: "none" };
+
+  const scale = Math.max(rect.width / vw, rect.height / vh);
+  const cropX = (vw * scale - rect.width) / 2;
+  const cropY = (vh * scale - rect.height) / 2;
+  const aPantallaX = (px) => (px * scale - cropX) / rect.width;
+  const aPantallaY = (py) => (py * scale - cropY) / rect.height;
+
+  const cx = aPantallaX(box.originX + box.width / 2);
+  const cy = aPantallaY(box.originY + box.height / 2);
+  const wRatio = (box.width * scale) / rect.width;
 
   if (wRatio < 0.22) return { tono: "off", razon: "lejos" };
   if (wRatio > 0.72) return { tono: "off", razon: "cerca" };
@@ -257,6 +272,24 @@ function CameraCapture({ onFile }) {
     setCountdown(null);
   };
 
+  // Conecta el stream activo al <video> actual. Hace falta como paso propio
+  // (no solo dentro de startCamera) porque tras capturar, el <video> se
+  // desmonta (se sustituye por el <img> de la foto) y al "Repetir" se monta
+  // un <video> nuevo sin srcObject: hay que reengancharle el stream, que
+  // sigue vivo de fondo (capture() no lo para).
+  const attachStream = async (video, stream) => {
+    if (!video || !stream) return;
+    video.srcObject = stream;
+    try {
+      await video.play();
+    } catch (playErr) {
+      // Reasignar srcObject (p. ej. la segunda invocación de StrictMode, o
+      // un reenganche casi simultáneo) aborta el play() anterior con
+      // AbortError: no es un fallo real de la cámara, se puede ignorar.
+      if (playErr?.name !== "AbortError") setStatus("error");
+    }
+  };
+
   const startCamera = async () => {
     setStatus("starting");
     try {
@@ -268,22 +301,18 @@ function CameraCapture({ onFile }) {
       // de efectos en desarrollo con StrictMode) para no dejarlo abierto.
       stopStream();
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        try {
-          await videoRef.current.play();
-        } catch (playErr) {
-          // Asignar srcObject de nuevo (p. ej. la segunda invocación de
-          // StrictMode) aborta el play() anterior con AbortError: no es
-          // un fallo real de la cámara, se puede ignorar.
-          if (playErr?.name !== "AbortError") throw playErr;
-        }
-      }
+      await attachStream(videoRef.current, stream);
       setStatus("live");
     } catch (e) {
       setStatus("error");
     }
   };
+
+  // Reengancha el stream cada vez que el estado pasa a "live" con un
+  // <video> nuevo en el DOM (típicamente tras pulsar "Repetir").
+  useEffect(() => {
+    if (status === "live") attachStream(videoRef.current, streamRef.current);
+  }, [status]);
 
   useEffect(() => {
     startCamera();
