@@ -7,7 +7,7 @@
         "path": "landing-leads",
         "responseMode": "onReceived",
         "options": {
-          "allowedOrigins": "https://clinica-aura-ruddy.vercel.app,https://clinica-aura-mllv.vercel.app"
+          "allowedOrigins": "https://landing-aura-ruddy.vercel.app,https://landing-aura-mllv.vercel.app"
         }
       },
       "type": "n8n-nodes-base.webhook",
