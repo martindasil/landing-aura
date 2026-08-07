@@ -285,6 +285,7 @@ export default {
   encuesta_espera: {
     activo: true,
     intro: "Como tenemos 30 segundos, cuéntame:",
+    boton_ver_informe: "Ver mi informe →",
     edad: {
       pregunta: "¿Qué edad tienes?",
       placeholder: "Ej. 34",

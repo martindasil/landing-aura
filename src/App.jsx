@@ -1050,7 +1050,11 @@ export default function LandingAura() {
         return;
       }
       setResult(parsed);
-      setView("report");
+      // Si hay encuesta de espera activa, no saltamos a "report" todavía:
+      // se espera a que el usuario la responda (ver botón "Ver mi informe"
+      // en la vista "analyzing"), para que el análisis rápido no se la
+      // lleve por delante antes de que le dé tiempo a leerla.
+      if (!encuestaEspera?.activo) setView("report");
     } catch (e) {
       setError("El análisis no se ha podido completar. Inténtalo de nuevo en unos segundos.");
       setView("upload");
@@ -1597,6 +1601,15 @@ export default function LandingAura() {
                     ))}
                   </select>
                 </div>
+                {result && (
+                  <button
+                    className="btn"
+                    disabled={!(lead.edad.trim() && lead.motivacion)}
+                    onClick={() => setView("report")}
+                  >
+                    {encuestaEspera.boton_ver_informe}
+                  </button>
+                )}
               </div>
             ) : (
               <>
