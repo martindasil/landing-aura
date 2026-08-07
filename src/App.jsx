@@ -260,10 +260,10 @@ const MEDIAPIPE_MODEL_URL =
 
 const AUTOCAPTURE_ESTABLE_MS = 1500;
 const DETECCION_INTERVALO_MS = 150;
-// Red de seguridad, no una promesa de velocidad: un análisis real vía LLM
-// normalmente tarda 8-20s. Antes estaba en 5000ms y abortaba análisis que
-// sí estaban funcionando (se veían como "sin créditos" sin serlo).
-const ANALYSIS_TIMEOUT_MS = 20000;
+// Red de seguridad, no una promesa de velocidad: el workflow real de n8n
+// está tardando ~20-30s. Súbelo si sigue abortando análisis que sí
+// funcionan; bájalo solo cuando el workflow de n8n responda más rápido.
+const ANALYSIS_TIMEOUT_MS = 40000;
 
 // Clasifica el recuadro de rostro que devuelve MediaPipe contra la zona del
 // óvalo guía (centro del encuadre). Todo esto ocurre con los números que ya
