@@ -1,0 +1,75 @@
+{
+  "name": "Landing IA — Cualificación",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cualificacion",
+        "responseMode": "onReceived",
+        "options": {
+          "allowedOrigins": "https://landing-aura-ruddy.vercel.app,https://landing-aura-mllv.vercel.app"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "a1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e",
+      "name": "Webhook",
+      "webhookId": "c7d8e9f0-1a2b-4c3d-8e9f-0a1b2c3d4e5f"
+    },
+    {
+      "parameters": {
+        "jsCode": "// El frontend (componente Cualificacion) envía:\n// { cliente, email, telefono, respuestas, score_parcial, timestamp }\n// respuestas = { objetivo: [...], historial, recurrencia, presupuesto,\n//                plazo, detonante, municipio }\n//\n// Este email es el SEGUNDO aviso al negocio (el primero, inmediato al\n// dejar los datos de contacto, lo manda \"Landing IA — Leads\"). Solo se\n// dispara si el lead completa las 6 preguntas — no incluye el informe,\n// igual que el otro.\n\nconst body = $input.first().json.body || $input.first().json;\nconst r = body.respuestas || {};\n\nconst lineas = [\n  `Objetivo: ${(r.objetivo || []).join(', ') || '-'}`,\n  `Historial de tratamientos: ${r.historial || '-'}`,\n  `Busca: ${r.recurrencia || '-'}`,\n  `Presupuesto por sesión: ${r.presupuesto || '-'}`,\n  `Plazo: ${r.plazo || '-'}`,\n  r.detonante ? `Motivo concreto: ${r.detonante}` : null,\n  `Municipio: ${r.municipio || '-'}`,\n].filter(Boolean).join('\\n');\n\nreturn [{\n  json: {\n    cliente: body.cliente || '',\n    email: body.email || '',\n    telefono: body.telefono || '',\n    score_parcial: body.score_parcial ?? '',\n    timestamp: body.timestamp || '',\n    respuestas_texto: lineas,\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [224, 0],
+      "id": "b2d3e4f5-a6b7-4c8d-9e0f-1a2b3c4d5e6f",
+      "name": "Formatear cualificación"
+    },
+    {
+      "parameters": {
+        "sendTo": "EMAIL_DEL_NEGOCIO@cambiar.com",
+        "subject": "=Cualificación completada: {{ $json.email }}",
+        "emailType": "text",
+        "message": "=El lead {{ $json.email }} ({{ $json.telefono }}) ha completado el cuestionario de cualificación.\n\nScore parcial: {{ $json.score_parcial }} / 85\n(quedan 15 puntos por añadir en este mismo n8n: distancia y renta del municipio)\n\n{{ $json.respuestas_texto }}\n\nFecha: {{ $json.timestamp }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [448, 0],
+      "id": "c3e4f5a6-b7c8-4d9e-0f1a-2b3c4d5e6f7a",
+      "name": "Enviar email de cualificación",
+      "webhookId": "d4f5a6b7-c8d9-4e0f-1a2b-3c4d5e6f7a8b"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Formatear cualificación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatear cualificación": {
+      "main": [
+        [
+          {
+            "node": "Enviar email de cualificación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
