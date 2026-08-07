@@ -8,6 +8,38 @@ export default {
   // "galeria": selector de archivo tradicional.
   captura: "camara",
 
+  // Tutorial de bienvenida: se muestra ANTES de la vista de subida/cámara,
+  // así que el permiso de cámara nunca se pide antes de que el usuario
+  // sepa para qué es. Un paso por pantalla, botón "Siguiente" hasta el
+  // último, que usa boton_final y lleva a la vista de captura.
+  onboarding: {
+    activo: true,
+    boton_siguiente: "Siguiente",
+    boton_final: "Empezar",
+    pasos: [
+      {
+        icono: "📸",
+        titulo: "Te haces una foto",
+        texto: "Sube una foto o hazte un selfie con la cámara del móvil, de frente y con buena luz.",
+      },
+      {
+        icono: "🔎",
+        titulo: "Analizamos tu piel",
+        texto: "En unos segundos evaluamos tu rostro y preparamos tu informe.",
+      },
+      {
+        icono: "📋",
+        titulo: "Recibes tu informe",
+        texto: "Verás un primer adelanto de tu informe personalizado con el estado de tu piel.",
+      },
+      {
+        icono: "📞",
+        titulo: "Te contactamos",
+        texto: "Nos dejas tus datos para enviarte el informe completo y que la clínica se ponga en contacto contigo.",
+      },
+    ],
+  },
+
   marca: {
     nombre: "Clínica Aura",
 
@@ -44,7 +76,7 @@ export default {
       cambiar_foto: "Cambiar foto",
       boton_analizar: "Analizar mi piel →",
       nota_privacidad: "Análisis gratuito y sin compromiso · Resultados al instante",
-      scan_sub: "Esto suele tardar unos 15 segundos",
+      scan_sub: "Tu informe estará listo en menos de 5 segundos",
       informe_titulo: "Tu informe de piel",
       analizar_otra: "Analizar otra foto",
       form_titulo: "Reserva tu valoración",
@@ -99,6 +131,149 @@ export default {
         "Revisaremos tu informe contigo, sin compromiso.",
       texto_boton: "Quiero mi valoración gratuita",
       campos: ["nombre", "email", "telefono", "franja"],
+    },
+  },
+
+  // Formulario de cualificación: se muestra DESPUÉS de desbloquear el
+  // informe (nunca antes), como bloque final. Sirve para priorizar leads
+  // antes de llamarlos y, a cambio, le enseña al lead una horquilla de
+  // precio orientativa. Todo el copy/opciones/pesos vive aquí — el
+  // componente Cualificacion de App.jsx no tiene ningún texto de negocio.
+  cualificacion: {
+    activo: true,
+    titulo: "Calcula tu presupuesto orientativo",
+    subtitulo: "Responde 6 preguntas y te damos una horquilla de precio para tu caso",
+    anclaje_precio:
+      "Una sesión de bótox va de 180 a 350 €. El ácido hialurónico, desde 340 € " +
+      "por vial. Los tratamientos de aparatología facial arrancan sobre los 120 €.",
+    boton_siguiente: "Siguiente",
+    boton_atras: "← Atrás",
+    boton_enviar: "Ver mi horquilla de precio",
+    boton_enviando: "Calculando…",
+    disclaimer: "Orientativo. El presupuesto exacto se confirma en una valoración presencial.",
+
+    // Zona de la clínica: Sant Cugat del Vallès y municipios del entorno
+    // (Vallès Occidental / área metropolitana de Barcelona).
+    municipios: [
+      "Sant Cugat del Vallès", "Barcelona", "Cerdanyola del Vallès", "Rubí",
+      "Sant Quirze del Vallès", "Sabadell", "Terrassa", "Sant Just Desvern",
+      "Esplugues de Llobregat", "Molins de Rei", "Barberà del Vallès",
+      "Ripollet", "Montcada i Reixac",
+    ],
+
+    preguntas: [
+      {
+        id: "objetivo",
+        tipo: "multi",
+        pregunta: "¿Qué te gustaría mejorar?",
+        opciones: [
+          "Arrugas de expresión",
+          "Flacidez y óvalo facial",
+          "Volumen (labios, pómulos)",
+          "Calidad de piel (manchas, poros, marcas)",
+          "Ojeras",
+        ],
+      },
+      {
+        id: "historial",
+        tipo: "single",
+        pregunta: "¿Te has hecho antes algún tratamiento estético?",
+        opciones: ["Sí, me trato de forma habitual", "Sí, alguna vez", "No, sería la primera vez"],
+      },
+      {
+        id: "recurrencia",
+        tipo: "single",
+        pregunta: "¿Buscas un resultado puntual o mantenimiento?",
+        opciones: [
+          "Algo puntual para un momento concreto",
+          "Empezar a cuidarme de forma continuada",
+          "Aún no lo sé",
+        ],
+      },
+      {
+        id: "presupuesto",
+        tipo: "single",
+        // Pinta cualificacion.anclaje_precio encima de las opciones.
+        mostrar_anclaje: true,
+        pregunta: "¿Qué presupuesto por sesión te encaja?",
+        opciones: ["Hasta 150 €", "150–350 €", "350–700 €", "Más de 700 €"],
+      },
+      {
+        id: "plazo",
+        tipo: "single",
+        pregunta: "¿Cuándo te gustaría empezar?",
+        opciones: ["Este mes", "En 1–3 meses", "Solo me informo"],
+        subpregunta: {
+          id: "detonante",
+          tipo: "single",
+          opcional: true,
+          mostrar_si: ["Este mes", "En 1–3 meses"],
+          pregunta: "¿Hay algún motivo concreto?",
+          opciones: ["Boda", "Viaje", "Evento", "Ninguno en especial"],
+        },
+      },
+      {
+        id: "municipio",
+        tipo: "texto",
+        pregunta: "¿En qué municipio te gustaría tratarte?",
+        placeholder: "Escribe tu municipio…",
+        // Referencia a cualificacion.municipios para el autocompletado.
+        autocompletar: "municipios",
+      },
+    ],
+
+    // Pesos del score parcial (máximo 85; el resto —distancia y renta del
+    // municipio— lo añade n8n, por eso el cliente nunca calcula distancia).
+    pesos: {
+      historial: {
+        max: 25,
+        valores: { "Sí, me trato de forma habitual": 25, "Sí, alguna vez": 15, "No, sería la primera vez": 5 },
+      },
+      recurrencia: {
+        max: 20,
+        valores: {
+          "Empezar a cuidarme de forma continuada": 20,
+          "Aún no lo sé": 10,
+          "Algo puntual para un momento concreto": 5,
+        },
+      },
+      valor_anual: {
+        max: 20,
+        objetivo: {
+          "Arrugas de expresión": 20,
+          "Flacidez y óvalo facial": 18,
+          "Volumen (labios, pómulos)": 18,
+          "Calidad de piel (manchas, poros, marcas)": 10,
+          "Ojeras": 12,
+        },
+        factor_presupuesto: { "Hasta 150 €": 0.5, "150–350 €": 0.8, "350–700 €": 1.0, "Más de 700 €": 1.0 },
+      },
+      plazo: {
+        max: 20,
+        valores: { "Este mes": 20, "En 1–3 meses": 12, "Solo me informo": 0 },
+        // Si detonante ≠ "Ninguno en especial", se suma con tope en max.
+        bonus_detonante: 5,
+      },
+    },
+
+    // ⚠️ EJEMPLO — horquillas de precio por objetivo, a validar con las
+    // tarifas reales del cliente antes de producción. Alimentan el cálculo
+    // de la horquilla final que se le enseña al lead tras responder.
+    rangos_precio: {
+      moneda: "EUR",
+      objetivo: {
+        "Arrugas de expresión": { min: 180, max: 350 },
+        "Flacidez y óvalo facial": { min: 250, max: 600 },
+        "Volumen (labios, pómulos)": { min: 340, max: 700 },
+        "Calidad de piel (manchas, poros, marcas)": { min: 120, max: 300 },
+        "Ojeras": { min: 150, max: 400 },
+      },
+      presupuesto: {
+        "Hasta 150 €": { min: 90, max: 150 },
+        "150–350 €": { min: 150, max: 350 },
+        "350–700 €": { min: 350, max: 700 },
+        "Más de 700 €": { min: 700, max: 1200 },
+      },
     },
   },
 };

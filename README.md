@@ -1,5 +1,25 @@
 # React + Vite
 
+## Variables de entorno
+
+Copia `.env.example` a `.env` (o `.env.local`) y ajusta:
+
+- `VITE_CLIENTE` — cliente activo (`clinica-aura` o `jardin-demo`), ver
+  `src/configs/activo.js`. Por defecto `clinica-aura` si no se define.
+- `VITE_WEBHOOK_CUALIFICACION` — opcional. Webhook de n8n que recibe las
+  respuestas del formulario de cualificación (bloque al final del informe,
+  tras desbloquear el lead-wall). Sin definir, el formulario funciona igual
+  y muestra la horquilla de precio al lead, solo que no envía el POST.
+
+(`WEBHOOK_URL` y `LEAD_WEBHOOK_URL` — análisis de la foto y notificación del
+lead-wall — son constantes al principio de `src/App.jsx`, no variables de
+entorno; edítalas ahí antes de desplegar.)
+
+En Vercel, define estas mismas variables en Project Settings → Environment
+Variables.
+
+---
+
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
 Currently, two official plugins are available:

@@ -22,7 +22,14 @@ const WEBHOOK_URL = "https://random-n8n.9zi4ji.easypanel.host/webhook/analisis-p
 // Si lo dejas vacío (""), el formulario funciona pero no envía nada.
 const LEAD_WEBHOOK_URL = "https://random-n8n.9zi4ji.easypanel.host/webhook/landing-leads";
 
-const { marca, analisis, respuesta, captura } = config;
+// Opcional: webhook del formulario de cualificación (ver componente
+// Cualificacion). Se define por variable de entorno (documentada en
+// .env.example y README) en vez de hardcodeada: si no está definida, el
+// formulario calcula y muestra igualmente la horquilla de precio al lead,
+// simplemente no hay POST.
+const CUALIFICACION_WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_CUALIFICACION;
+
+const { marca, analisis, respuesta, captura, cualificacion, onboarding } = config;
 const { colores, hero, textos_upload: t, footer } = marca;
 const capturaModo = captura === "camara" ? "camara" : "galeria";
 
@@ -35,6 +42,58 @@ function renderEmphasis(text) {
 const scoreTone = (n) => (n >= 75 ? "var(--sage)" : n >= 55 ? "var(--amber)" : "var(--clay)");
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Formato real de un teléfono español: 9 dígitos empezando por 6/7 (móvil)
+// u 8/9 (fijo), con prefijo internacional opcional. No basta con "9 dígitos
+// cualquiera" (eso aceptaría cosas como 111111111): tiene que empezar por
+// un prefijo que exista de verdad.
+const PHONE_RE = /^(?:\+34|0034)?[6789]\d{8}$/;
+const telefonoValido = (valor) => PHONE_RE.test((valor || "").replace(/[\s-]+/g, ""));
+
+// ── Formulario de cualificación: scoring y horquilla de precio ────────
+// Funciones puras: todos los números de negocio vienen de
+// cualificacion.pesos / cualificacion.rangos_precio (config del cliente),
+// nunca hardcodeados aquí.
+
+// Score parcial sobre 85 (n8n añade después distancia y renta del
+// municipio, los 15 puntos restantes — por eso el cliente no calcula
+// distancia).
+function calcularScoreCualificacion(pesos, respuestas) {
+  const historial = pesos.historial.valores[respuestas.historial] || 0;
+  const recurrencia = pesos.recurrencia.valores[respuestas.recurrencia] || 0;
+
+  const pesoObjetivo = (respuestas.objetivo || [])
+    .reduce((max, o) => Math.max(max, pesos.valor_anual.objetivo[o] || 0), 0);
+  const factor = pesos.valor_anual.factor_presupuesto[respuestas.presupuesto] || 0;
+  const valor_anual = Math.round(pesoObjetivo * factor);
+
+  let plazo = pesos.plazo.valores[respuestas.plazo] || 0;
+  if (respuestas.detonante && respuestas.detonante !== "Ninguno en especial") {
+    plazo = Math.min(pesos.plazo.max, plazo + pesos.plazo.bonus_detonante);
+  }
+
+  return { historial, recurrencia, valor_anual, plazo, total: historial + recurrencia + valor_anual + plazo };
+}
+
+// Horquilla de precio mostrada al lead como recompensa por responder:
+// toma el objetivo de mayor peso entre los seleccionados (mismo criterio
+// que usa valor_anual en el score) y cruza su rango habitual con la banda
+// de presupuesto elegida. Si no hay solape, muestra el rango propio del
+// objetivo tal cual, sin forzar un cruce que no tiene sentido.
+function calcularHorquillaCualificacion(rangosPrecio, pesosObjetivo, respuestas) {
+  const objetivos = respuestas.objetivo || [];
+  if (!objetivos.length) return null;
+  const principal = objetivos.reduce(
+    (mejor, o) => ((pesosObjetivo[o] || 0) > (pesosObjetivo[mejor] || 0) ? o : mejor),
+    objetivos[0]
+  );
+  const base = rangosPrecio.objetivo[principal];
+  const banda = rangosPrecio.presupuesto[respuestas.presupuesto];
+  if (!base || !banda) return null;
+  const min = Math.max(base.min, banda.min);
+  const max = Math.min(base.max, banda.max);
+  return { ...(min <= max ? { min, max } : base), moneda: rangosPrecio.moneda };
+}
 
 // ── Renderizadores de bloque (result.bloques[].tipo) ──────────
 // Catálogo fijo definido en el contrato de respuesta de la IA.
@@ -193,6 +252,7 @@ const MEDIAPIPE_MODEL_URL =
 
 const AUTOCAPTURE_ESTABLE_MS = 1500;
 const DETECCION_INTERVALO_MS = 150;
+const ANALYSIS_TIMEOUT_MS = 5000;
 
 // Clasifica el recuadro de rostro que devuelve MediaPipe contra la zona del
 // óvalo guía (centro del encuadre). Todo esto ocurre con los números que ya
@@ -589,6 +649,209 @@ function LeadFormFields({ campos, lead, setLead }) {
   );
 }
 
+// ── Formulario de cualificación (post-desbloqueo) ──────────────────────
+// Una pregunta por pantalla, config-driven al 100% (cfg = cualificacion del
+// cliente activo). Se muestra solo tras desbloquear el informe; nunca antes.
+
+function esPasoValido(pregunta, respuestas) {
+  if (pregunta.opcional) return true;
+  const valor = respuestas[pregunta.id];
+  if (pregunta.tipo === "multi") return Array.isArray(valor) && valor.length > 0;
+  if (pregunta.tipo === "texto") return !!valor && valor.trim().length > 0;
+  return !!valor;
+}
+
+// Construye la lista de pasos a partir de cfg.preguntas, insertando la
+// subpregunta (p. ej. "detonante") solo si la respuesta actual a su
+// pregunta padre está en subpregunta.mostrar_si. Se recalcula cada render:
+// barato con 6-7 preguntas y evita índices hardcodeados.
+function construirPasos(preguntas, respuestas) {
+  const pasos = [];
+  for (const p of preguntas) {
+    pasos.push(p);
+    if (p.subpregunta && p.subpregunta.mostrar_si.includes(respuestas[p.id])) {
+      pasos.push(p.subpregunta);
+    }
+  }
+  return pasos;
+}
+
+function Cualificacion({ cfg, marca, lead }) {
+  const [respuestas, setRespuestas] = useState({});
+  const [pasoIdx, setPasoIdx] = useState(0);
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [sugerenciasAbiertas, setSugerenciasAbiertas] = useState(false);
+
+  const pasos = construirPasos(cfg.preguntas, respuestas);
+  // Si la respuesta a "plazo" cambia y hace desaparecer la subpregunta,
+  // pasoIdx podría apuntar fuera de rango: lo recortamos al último paso.
+  const pasoIdx_ = Math.min(pasoIdx, pasos.length - 1);
+  const pasoActual = pasos[pasoIdx_];
+  const esUltimo = pasoIdx_ === pasos.length - 1;
+  const valido = esPasoValido(pasoActual, respuestas);
+
+  const setSingle = (id, opcion) => setRespuestas((r) => ({ ...r, [id]: opcion }));
+  const toggleMulti = (id, opcion) =>
+    setRespuestas((r) => {
+      const actual = r[id] || [];
+      return { ...r, [id]: actual.includes(opcion) ? actual.filter((o) => o !== opcion) : [...actual, opcion] };
+    });
+  const setTexto = (id, valor) => setRespuestas((r) => ({ ...r, [id]: valor }));
+
+  const siguiente = () => {
+    if (!valido) return;
+    if (esUltimo) {
+      enviar();
+    } else {
+      setPasoIdx(pasoIdx_ + 1);
+    }
+  };
+  const atras = () => setPasoIdx(Math.max(0, pasoIdx_ - 1));
+
+  const enviar = async () => {
+    const score = calcularScoreCualificacion(cfg.pesos, respuestas);
+    const horquilla = calcularHorquillaCualificacion(cfg.rangos_precio, cfg.pesos.valor_anual.objetivo, respuestas);
+    setResultado(horquilla);
+    setEnviando(true);
+    if (CUALIFICACION_WEBHOOK_URL) {
+      try {
+        await fetch(CUALIFICACION_WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cliente: marca.nombre.toLowerCase().replace(/\s+/g, "-"),
+            email: lead.email?.trim() || "",
+            telefono: lead.telefono?.trim() || "",
+            respuestas,
+            score_parcial: score.total,
+            timestamp: new Date().toISOString(),
+          }),
+        });
+      } catch (e) {
+        // No bloqueamos la vista: el lead ya tiene su horquilla en pantalla
+        // aunque el envío falle (red caída, webhook no configurado, etc.)
+        console.error("Error enviando cualificación:", e);
+      }
+    }
+    setEnviando(false);
+    setEnviado(true);
+  };
+
+  if (enviado) {
+    return (
+      <div className="qual-section">
+        <div className="qual-card qual-result">
+          <div className="card-label">Tu horquilla orientativa</div>
+          {resultado ? (
+            <div className="price-range">
+              {resultado.min === resultado.max
+                ? `${resultado.min} ${resultado.moneda}`
+                : `${resultado.min}–${resultado.max} ${resultado.moneda}`}
+            </div>
+          ) : (
+            <p className="zone-obs" style={{ textAlign: "center" }}>
+              Gracias por tus respuestas.
+            </p>
+          )}
+          <div className="price-disclaimer">{cfg.disclaimer}</div>
+        </div>
+      </div>
+    );
+  }
+
+  const municipiosSugeridos =
+    pasoActual.tipo === "texto" && pasoActual.autocompletar === "municipios"
+      ? (cfg.municipios || [])
+          .filter((m) => m.toLowerCase().includes((respuestas.municipio || "").toLowerCase()))
+          .slice(0, 6)
+      : [];
+
+  return (
+    <div className="qual-section">
+      <div className="qual-head">
+        <h3>{cfg.titulo}</h3>
+        <p>{cfg.subtitulo}</p>
+      </div>
+
+      <div className="qual-card">
+        <div className="qual-progress-track">
+          <div className="qual-progress-bar" style={{ width: `${((pasoIdx_ + 1) / pasos.length) * 100}%` }} />
+        </div>
+
+        <div className="qual-step" key={pasoIdx_}>
+          <div className="qual-question">
+            {pasoActual.pregunta}
+            {pasoActual.opcional && <span className="qual-opcional"> (opcional)</span>}
+          </div>
+
+          {pasoActual.mostrar_anclaje && <div className="qual-anchor">{cfg.anclaje_precio}</div>}
+
+          {pasoActual.tipo === "texto" ? (
+            <div className="qual-text-wrap">
+              <input
+                type="text"
+                className="qual-text-input"
+                placeholder={pasoActual.placeholder}
+                value={respuestas[pasoActual.id] || ""}
+                onChange={(e) => setTexto(pasoActual.id, e.target.value)}
+                onFocus={() => setSugerenciasAbiertas(true)}
+                onBlur={() => setTimeout(() => setSugerenciasAbiertas(false), 120)}
+              />
+              {sugerenciasAbiertas && municipiosSugeridos.length > 0 && (
+                <ul className="qual-suggestions">
+                  {municipiosSugeridos.map((m) => (
+                    <li
+                      key={m}
+                      className="qual-suggestion"
+                      onMouseDown={() => setTexto(pasoActual.id, m)}
+                    >
+                      {m}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <div className="qual-options">
+              {pasoActual.opciones.map((o) => {
+                const seleccionado =
+                  pasoActual.tipo === "multi"
+                    ? (respuestas[pasoActual.id] || []).includes(o)
+                    : respuestas[pasoActual.id] === o;
+                return (
+                  <button
+                    key={o}
+                    type="button"
+                    className={`qual-option${seleccionado ? " selected" : ""}`}
+                    onClick={() =>
+                      pasoActual.tipo === "multi" ? toggleMulti(pasoActual.id, o) : setSingle(pasoActual.id, o)
+                    }
+                  >
+                    {o}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="qual-nav">
+          {pasoIdx_ > 0 && (
+            <button type="button" className="btn ghost" onClick={atras}>
+              {cfg.boton_atras}
+            </button>
+          )}
+          <button type="button" className="btn" disabled={!valido || enviando} onClick={siguiente}>
+            {esUltimo ? (enviando ? cfg.boton_enviando : cfg.boton_enviar) : cfg.boton_siguiente}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function renderBloque(bloque, i, barsOn) {
   switch (bloque.tipo) {
     case "puntuaciones":
@@ -618,8 +881,45 @@ function renderBloque(bloque, i, barsOn) {
   }
 }
 
+const onboardingActivo = !!onboarding?.activo;
+
+// ── Tutorial de bienvenida (antes de pedir cámara/foto) ────────────────
+// Un paso por pantalla, config-driven (cfg = onboarding del cliente
+// activo). Solo cuando el usuario termina (o si onboarding.activo es
+// false) se llega a la vista "upload", que es la que monta CameraCapture
+// y dispara el permiso de cámara — así el permiso nunca se pide antes de
+// que el usuario sepa para qué es.
+function Onboarding({ cfg, onFinish }) {
+  const [pasoIdx, setPasoIdx] = useState(0);
+  const paso = cfg.pasos[pasoIdx];
+  const esUltimo = pasoIdx === cfg.pasos.length - 1;
+
+  const siguiente = () => (esUltimo ? onFinish() : setPasoIdx((i) => i + 1));
+
+  return (
+    <div className="onboard-wrap">
+      <div className="card onboard-card">
+        <div className="onboard-dots">
+          {cfg.pasos.map((_, i) => (
+            <span key={i} className={`onboard-dot${i <= pasoIdx ? " filled" : ""}`} />
+          ))}
+        </div>
+        <div className="onboard-step" key={pasoIdx}>
+          <div className="onboard-icon">{paso.icono}</div>
+          <h2>{paso.titulo}</h2>
+          <p>{paso.texto}</p>
+        </div>
+        <button className="btn" onClick={siguiente}>
+          {esUltimo ? cfg.boton_final : cfg.boton_siguiente}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function LandingAura() {
-  const [view, setView] = useState("upload"); // upload | analyzing | report | form | done
+  // onboarding | upload | analyzing | report | form | done
+  const [view, setView] = useState(onboardingActivo ? "onboarding" : "upload");
   const [photo, setPhoto] = useState(null);
   const [consent, setConsent] = useState(false);
   const [msgIdx, setMsgIdx] = useState(0);
@@ -640,7 +940,9 @@ export default function LandingAura() {
 
   useEffect(() => {
     if (view !== "analyzing") return;
-    const tick = setInterval(() => setMsgIdx((i) => (i + 1) % mensajesCarga.length), 1900);
+    // Al ritmo del análisis real (máx. ANALYSIS_TIMEOUT_MS), un intervalo
+    // más corto que el de antes para que se lleguen a ver varios mensajes.
+    const tick = setInterval(() => setMsgIdx((i) => (i + 1) % mensajesCarga.length), 1000);
     return () => clearInterval(tick);
   }, [view]);
 
@@ -711,14 +1013,25 @@ export default function LandingAura() {
           etiqueta_legal: respuesta.imagen_despues.etiqueta_legal,
         };
       }
-      const response = await fetch(WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // n8n construye el prompt a partir de `analisis` y valida que
-        // `bloques_activos` solo contenga tipos del catálogo fijo
-        // (ver n8n-PROMPT-BUILDER.md).
-        body: JSON.stringify(body),
-      });
+      // El análisis debe resolverse en máx. ANALYSIS_TIMEOUT_MS: si el
+      // webhook tarda más, abortamos y lo tratamos como fallo (mismo
+      // mensaje que cualquier otro error de red).
+      const timeoutCtrl = new AbortController();
+      const timeoutId = setTimeout(() => timeoutCtrl.abort(), ANALYSIS_TIMEOUT_MS);
+      let response;
+      try {
+        response = await fetch(WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          // n8n construye el prompt a partir de `analisis` y valida que
+          // `bloques_activos` solo contenga tipos del catálogo fijo
+          // (ver n8n-PROMPT-BUILDER.md).
+          body: JSON.stringify(body),
+          signal: timeoutCtrl.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
       if (!response.ok) throw new Error(`Webhook respondió ${response.status}`);
       const parsed = await response.json();
       if (!parsed.es_valido) {
@@ -738,7 +1051,7 @@ export default function LandingAura() {
     const campos = respuesta.cta.campos;
     if (campos.includes("nombre") && !lead.nombre.trim()) return;
     if (campos.includes("email") && !EMAIL_RE.test(lead.email.trim())) return;
-    if (campos.includes("telefono") && lead.telefono.trim().length < 9) return;
+    if (campos.includes("telefono") && !telefonoValido(lead.telefono)) return;
     if (sending) return;
     setSending(true);
     if (LEAD_WEBHOOK_URL) {
@@ -788,7 +1101,7 @@ export default function LandingAura() {
   const formValido =
     (!campos.includes("nombre") || lead.nombre.trim()) &&
     (!campos.includes("email") || EMAIL_RE.test(lead.email.trim())) &&
-    (!campos.includes("telefono") || lead.telefono.trim().length >= 9);
+    (!campos.includes("telefono") || telefonoValido(lead.telefono));
 
   return (
     <div className="page">
@@ -820,6 +1133,21 @@ export default function LandingAura() {
 
         .topbar { display: flex; align-items: center; justify-content: space-between; padding: 20px 0 0; }
         .brand { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 600; letter-spacing: 0.02em; color: var(--sage-deep); }
+
+        .onboard-wrap { padding: 52px 0 8px; }
+        .onboard-card { max-width: 420px; margin: 0 auto; text-align: center; padding: 36px 28px; }
+        .onboard-dots { display: flex; justify-content: center; gap: 8px; margin-bottom: 28px; }
+        .onboard-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); transition: background .2s; }
+        .onboard-dot.filled { background: var(--sage); }
+        .onboard-step { animation: qualIn .28s ease; min-height: 180px; display: flex; flex-direction: column; justify-content: center; }
+        @media (prefers-reduced-motion: reduce) { .onboard-step { animation: none; } }
+        .onboard-icon {
+          width: 64px; height: 64px; border-radius: 50%; background: var(--sage-soft);
+          display: flex; align-items: center; justify-content: center; font-size: 28px;
+          margin: 0 auto 18px;
+        }
+        .onboard-step h2 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 22px; margin-bottom: 10px; }
+        .onboard-step p { color: var(--ink-soft); font-size: 14.5px; line-height: 1.55; }
 
         .hero { padding: 52px 0 8px; text-align: center; }
         .eyebrow {
@@ -1059,6 +1387,55 @@ export default function LandingAura() {
         }
         .field input:focus, .field select:focus { border-color: var(--sage); }
 
+        .qual-section { margin-top: 26px; }
+        .qual-head { text-align: center; margin-bottom: 16px; }
+        .qual-head h3 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 22px; margin-bottom: 6px; }
+        .qual-head p { font-size: 13.5px; color: var(--ink-soft); line-height: 1.5; }
+        .qual-card {
+          background: var(--card); border: 1px solid var(--line); border-radius: 20px;
+          padding: 24px; box-shadow: 0 2px 24px rgba(34,49,43,0.04);
+        }
+        .qual-progress-track { height: 5px; background: #EFE9E0; border-radius: 100px; overflow: hidden; }
+        .qual-progress-bar { height: 100%; background: var(--sage); border-radius: 100px; transition: width .3s ease; }
+        .qual-step { margin-top: 20px; animation: qualIn .28s ease; }
+        @keyframes qualIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @media (prefers-reduced-motion: reduce) { .qual-step { animation: none; } }
+        .qual-question { font-family: 'Fraunces', serif; font-size: 18px; font-weight: 500; line-height: 1.35; }
+        .qual-opcional { font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; color: var(--ink-soft); }
+        .qual-anchor {
+          margin-top: 10px; font-size: 12.5px; color: var(--ink-soft); line-height: 1.5;
+          background: var(--sage-soft); border-radius: 12px; padding: 10px 14px;
+        }
+        .qual-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+        .qual-option {
+          font-family: inherit; font-size: 13.5px; font-weight: 600; color: var(--ink);
+          background: #FDFCFA; border: 1.5px solid var(--line); border-radius: 100px;
+          padding: 10px 16px; cursor: pointer; transition: border-color .15s, background .15s, color .15s;
+        }
+        .qual-option:hover { border-color: var(--sage); }
+        .qual-option.selected { background: var(--sage); border-color: var(--sage); color: #FDFBF8; }
+        .qual-text-wrap { margin-top: 16px; }
+        .qual-text-input {
+          width: 100%; padding: 13px 16px; border: 1.5px solid var(--line);
+          border-radius: 12px; font-family: inherit; font-size: 15px; color: var(--ink);
+          background: #FDFCFA; outline: none; transition: border-color .2s;
+        }
+        .qual-text-input:focus { border-color: var(--sage); }
+        .qual-suggestions {
+          /* Flujo normal (no absolute): así nunca queda flotando encima del
+             botón "Siguiente" — en su lugar empuja el layout hacia abajo. */
+          margin-top: 6px; max-height: 176px; overflow-y: auto;
+          background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+          box-shadow: 0 4px 16px rgba(34,49,43,0.08); list-style: none;
+        }
+        .qual-suggestion { padding: 11px 16px; font-size: 14px; cursor: pointer; }
+        .qual-suggestion:hover { background: var(--sage-soft); }
+        .qual-nav { display: flex; gap: 12px; margin-top: 24px; }
+        .qual-nav .btn { margin-top: 0; }
+        .qual-nav .btn.ghost { flex: 0 0 auto; width: auto; padding-left: 20px; padding-right: 20px; }
+        .qual-nav .btn:not(.ghost) { flex: 1; }
+        .qual-result { text-align: center; }
+
         .done { text-align: center; padding: 72px 0 0; }
         .done .check {
           width: 68px; height: 68px; border-radius: 50%; background: var(--sage-soft);
@@ -1078,6 +1455,10 @@ export default function LandingAura() {
         <div className="topbar">
           <div className="brand">{marca.nombre}</div>
         </div>
+
+        {view === "onboarding" && (
+          <Onboarding cfg={onboarding} onFinish={() => setView("upload")} />
+        )}
 
         {view === "upload" && (
           <>
@@ -1178,11 +1559,18 @@ export default function LandingAura() {
             </div>
 
             {leadWallActive && !leadWallUnlocked ? (
-              <div className="lockwrap">
-                <div className="lock-blur">
-                  {result.bloques?.map((b, i) => renderBloque(b, i, barsOn))}
-                </div>
-              </div>
+              <>
+                {/* El primer bloque se ve sin bloquear (gancho, junto al
+                    resumen); el resto queda borroso hasta desbloquear. */}
+                {result.bloques?.[0] && renderBloque(result.bloques[0], 0, barsOn)}
+                {result.bloques?.length > 1 && (
+                  <div className="lockwrap">
+                    <div className="lock-blur">
+                      {result.bloques.slice(1).map((b, i) => renderBloque(b, i + 1, barsOn))}
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
               result.bloques?.map((b, i) => renderBloque(b, i, barsOn))
             )}
@@ -1214,6 +1602,10 @@ export default function LandingAura() {
                   {respuesta.cta.texto_boton}
                 </button>
               </div>
+            )}
+
+            {leadWallActive && leadWallUnlocked && cualificacion?.activo && (
+              <Cualificacion cfg={cualificacion} marca={marca} lead={lead} />
             )}
 
             <div className="again">
