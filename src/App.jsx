@@ -781,12 +781,10 @@ function Cualificacion({ cfg, marca, lead }) {
 
   return (
     <div className="qual-section">
-      <div className="qual-head">
-        <h3>{cfg.titulo}</h3>
-        <p>{cfg.subtitulo}</p>
-      </div>
-
       <div className="qual-card">
+        <h3 className="qual-title">{cfg.titulo}</h3>
+        <p className="qual-subtitle">{cfg.subtitulo}</p>
+
         <div className="qual-progress-track">
           <div className="qual-progress-bar" style={{ width: `${((pasoIdx_ + 1) / pasos.length) * 100}%` }} />
         </div>
@@ -1340,19 +1338,21 @@ export default function LandingAura() {
           text-align: center; line-height: 1.5;
         }
 
-        .lockwrap { position: relative; }
-        .lock-blur { filter: blur(9px); pointer-events: none; user-select: none; }
-
-        .leadwall-modal-backdrop {
-          position: fixed; inset: 0; z-index: 50;
-          background: rgba(20,32,26,0.55);
-          display: flex; align-items: flex-start; justify-content: center;
-          padding: 40px 16px; overflow-y: auto;
+        /* Grid en vez de position:absolute: lock-blur y leadwall-overlay
+           comparten la misma celda (1/1), así que .lockwrap crece para
+           encajar el más alto de los dos sin números mágicos — y el
+           formulario nunca tapa el gancho (resumen + primer bloque), que
+           vive FUERA de este contenedor. */
+        .lockwrap { display: grid; }
+        .lock-blur { grid-area: 1 / 1; filter: blur(9px); pointer-events: none; user-select: none; }
+        .leadwall-overlay {
+          grid-area: 1 / 1; z-index: 5;
+          display: flex; align-items: center; justify-content: center; padding: 16px;
         }
-        .leadwall-modal {
+        .leadwall-card {
           background: var(--card); border-radius: 20px; border: 1px solid var(--line);
-          box-shadow: 0 20px 60px rgba(0,0,0,0.28);
-          padding: 30px 26px; max-width: 420px; width: 100%; margin: auto 0;
+          box-shadow: 0 12px 40px rgba(20,32,26,0.18);
+          padding: 26px 24px; max-width: 380px; width: 100%;
         }
         .lock-icon {
           width: 56px; height: 56px; border-radius: 50%;
@@ -1397,53 +1397,59 @@ export default function LandingAura() {
         .field input:focus, .field select:focus { border-color: var(--sage); }
 
         .qual-section { margin-top: 26px; }
-        .qual-head { text-align: center; margin-bottom: 16px; }
-        .qual-head h3 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 22px; margin-bottom: 6px; }
-        .qual-head p { font-size: 13.5px; color: var(--ink-soft); line-height: 1.5; }
+        /* Mismo tratamiento visual que .cta-block: fondo verde oscuro,
+           letras blancas — es el único cuadro final, no hay uno genérico
+           de "reserva tu valoración" al lado. */
         .qual-card {
-          background: var(--card); border: 1px solid var(--line); border-radius: 20px;
-          padding: 24px; box-shadow: 0 2px 24px rgba(34,49,43,0.04);
+          background: var(--sage-deep); color: #F2EFE9; border: none; border-radius: 20px;
+          padding: 28px 24px; box-shadow: 0 2px 24px rgba(34,49,43,0.08);
         }
-        .qual-progress-track { height: 5px; background: #EFE9E0; border-radius: 100px; overflow: hidden; }
-        .qual-progress-bar { height: 100%; background: var(--sage); border-radius: 100px; transition: width .3s ease; }
+        .qual-title { font-family: 'Fraunces', serif; font-weight: 500; font-size: 22px; text-align: center; margin-bottom: 6px; }
+        .qual-subtitle { font-size: 13.5px; opacity: 0.85; line-height: 1.5; text-align: center; margin-bottom: 20px; }
+        .qual-progress-track { height: 5px; background: rgba(255,255,255,0.22); border-radius: 100px; overflow: hidden; }
+        .qual-progress-bar { height: 100%; background: var(--blush); border-radius: 100px; transition: width .3s ease; }
         .qual-step { margin-top: 20px; animation: qualIn .28s ease; }
         @keyframes qualIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         @media (prefers-reduced-motion: reduce) { .qual-step { animation: none; } }
         .qual-question { font-family: 'Fraunces', serif; font-size: 18px; font-weight: 500; line-height: 1.35; }
-        .qual-opcional { font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; color: var(--ink-soft); }
+        .qual-opcional { font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; opacity: 0.7; }
         .qual-anchor {
-          margin-top: 10px; font-size: 12.5px; color: var(--ink-soft); line-height: 1.5;
-          background: var(--sage-soft); border-radius: 12px; padding: 10px 14px;
+          margin-top: 10px; font-size: 12.5px; line-height: 1.5;
+          background: rgba(255,255,255,0.12); border-radius: 12px; padding: 10px 14px;
         }
         .qual-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
         .qual-option {
           font-family: inherit; font-size: 13.5px; font-weight: 600; color: var(--ink);
-          background: #FDFCFA; border: 1.5px solid var(--line); border-radius: 100px;
+          background: #FDFCFA; border: 1.5px solid transparent; border-radius: 100px;
           padding: 10px 16px; cursor: pointer; transition: border-color .15s, background .15s, color .15s;
         }
-        .qual-option:hover { border-color: var(--sage); }
-        .qual-option.selected { background: var(--sage); border-color: var(--sage); color: #FDFBF8; }
+        .qual-option:hover { border-color: var(--blush); }
+        .qual-option.selected { background: var(--blush); border-color: var(--blush); color: var(--sage-deep); }
         .qual-text-wrap { margin-top: 16px; }
         .qual-text-input {
-          width: 100%; padding: 13px 16px; border: 1.5px solid var(--line);
+          width: 100%; padding: 13px 16px; border: 1.5px solid transparent;
           border-radius: 12px; font-family: inherit; font-size: 15px; color: var(--ink);
           background: #FDFCFA; outline: none; transition: border-color .2s;
         }
-        .qual-text-input:focus { border-color: var(--sage); }
+        .qual-text-input:focus { border-color: var(--blush); }
         .qual-suggestions {
           /* Flujo normal (no absolute): así nunca queda flotando encima del
              botón "Siguiente" — en su lugar empuja el layout hacia abajo. */
           margin-top: 6px; max-height: 176px; overflow-y: auto;
           background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-          box-shadow: 0 4px 16px rgba(34,49,43,0.08); list-style: none;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.15); list-style: none;
         }
-        .qual-suggestion { padding: 11px 16px; font-size: 14px; cursor: pointer; }
+        .qual-suggestion { padding: 11px 16px; font-size: 14px; color: var(--ink); cursor: pointer; }
         .qual-suggestion:hover { background: var(--sage-soft); }
         .qual-nav { display: flex; gap: 12px; margin-top: 24px; }
         .qual-nav .btn { margin-top: 0; }
-        .qual-nav .btn.ghost { flex: 0 0 auto; width: auto; padding-left: 20px; padding-right: 20px; }
-        .qual-nav .btn:not(.ghost) { flex: 1; }
+        .qual-nav .btn.ghost { flex: 0 0 auto; width: auto; padding-left: 20px; padding-right: 20px; border-color: rgba(255,255,255,0.5); color: #F2EFE9; }
+        .qual-nav .btn:not(.ghost) { flex: 1; background: var(--blush); color: var(--sage-deep); }
+        .qual-nav .btn:not(.ghost):hover:not(:disabled) { background: #F0DACB; }
         .qual-result { text-align: center; }
+        .qual-result .card-label { color: rgba(255,255,255,0.75); }
+        .qual-result .price-range { color: #FDFBF8; }
+        .qual-result .price-disclaimer { background: rgba(255,255,255,0.14); color: #F2EFE9; }
 
         .done { text-align: center; padding: 72px 0 0; }
         .done .check {
@@ -1570,12 +1576,27 @@ export default function LandingAura() {
             {leadWallActive && !leadWallUnlocked ? (
               <>
                 {/* El primer bloque se ve sin bloquear (gancho, junto al
-                    resumen); el resto queda borroso hasta desbloquear. */}
+                    resumen); el resto queda borroso — con el formulario
+                    encima, pero solo tapando ESTA sección, no toda la
+                    pantalla, para que el gancho se pueda seguir leyendo. */}
                 {result.bloques?.[0] && renderBloque(result.bloques[0], 0, barsOn)}
                 {result.bloques?.length > 1 && (
                   <div className="lockwrap">
                     <div className="lock-blur">
                       {result.bloques.slice(1).map((b, i) => renderBloque(b, i + 1, barsOn))}
+                    </div>
+                    <div className="leadwall-overlay">
+                      <div className="leadwall-card">
+                        <div className="lock-icon">🔒</div>
+                        <div className="lock-msg">Deja tus datos para ver tu informe completo</div>
+                        <LeadFormFields campos={campos} lead={lead} setLead={setLead} />
+                        <button className="btn" disabled={!formValido || sending} onClick={submitLead}>
+                          {sending ? t.form_boton_enviando : t.form_boton}
+                        </button>
+                        {campos.includes("email") && (
+                          <p className="privacy-note">Te enviaremos tu informe completo a este email.</p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1584,23 +1605,9 @@ export default function LandingAura() {
               result.bloques?.map((b, i) => renderBloque(b, i, barsOn))
             )}
 
-            {leadWallActive && !leadWallUnlocked && (
-              <div className="leadwall-modal-backdrop">
-                <div className="leadwall-modal">
-                  <div className="lock-icon">🔒</div>
-                  <div className="lock-msg">Deja tus datos para ver tu informe completo</div>
-                  <LeadFormFields campos={campos} lead={lead} setLead={setLead} />
-                  <button className="btn" disabled={!formValido || sending} onClick={submitLead}>
-                    {sending ? t.form_boton_enviando : t.form_boton}
-                  </button>
-                  {campos.includes("email") && (
-                    <p className="privacy-note">Te enviaremos tu informe completo a este email.</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {(!leadWallActive || leadWallUnlocked) && (
+            {/* Si hay formulario de cualificación, ES el CTA final — no
+                dupliques con el bloque genérico de "reserva tu valoración". */}
+            {(!leadWallActive || leadWallUnlocked) && !cualificacion?.activo && (
               <div className="cta-block">
                 <h3>{respuesta.cta.titulo}</h3>
                 <p>{respuesta.cta.texto}</p>
