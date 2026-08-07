@@ -59,6 +59,49 @@
       "id": "5cd1c5a7-1b77-4d05-9c86-96fb3dc78d1a",
       "name": "Enviar email al negocio",
       "webhookId": "b3e2a9c1-6b7d-4f2a-9e8c-1a2b3c4d5e6f"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Segunda rama del mismo Webhook: el informe COMPLETO, pero al email del\n// propio lead (no al negocio) — cumple la promesa \"Te enviaremos tu\n// informe completo a este email\" del formulario. Reutiliza el formateo\n// de bloques que antes vivía en el email del negocio.\n//\n// Si no hay email (cliente sin ese campo activo en cta.campos), no se\n// devuelve ningún item: el nodo Gmail de esta rama simplemente no se\n// ejecuta para esa ejecución, en vez de fallar por \"sendTo\" vacío.\n\nconst body = $input.first().json.body || $input.first().json;\nif (!body.email) return [];\n\nfunction formatearBloque(b) {\n  switch (b.tipo) {\n    case 'puntuaciones':\n      return 'Puntuación por zonas:\\n' + (b.items || [])\n        .map((i) => `  - ${i.nombre}: ${i.puntuacion}/100 — ${i.observacion}`)\n        .join('\\n');\n    case 'fortalezas':\n      return 'Fortalezas:\\n' + (b.items || []).map((i) => `  - ${i}`).join('\\n');\n    case 'recomendaciones':\n      return 'Recomendaciones:\\n' + (b.items || [])\n        .map((r) => `  - ${r.titulo} (${r.zona}): ${r.beneficio}${r.detalle ? '. ' + r.detalle : ''}`)\n        .join('\\n');\n    case 'checklist':\n      return 'Checklist:\\n' + (b.items || [])\n        .map((c) => `  - [${c.estado}] ${c.nombre}${c.observacion ? ': ' + c.observacion : ''}`)\n        .join('\\n');\n    case 'propuesta':\n      return 'Propuesta:\\n' + (b.partidas || [])\n        .map((p) => `  - ${p.nombre}: ${p.descripcion}`)\n        .join('\\n');\n    case 'horquilla_precio': {\n      const rango = `${b.minimo}–${b.maximo} ${b.moneda || ''}`.trim();\n      return `Rango de precio orientativo: ${rango}${b.nota ? ' (' + b.nota + ')' : ''}`;\n    }\n    default:\n      return null;\n  }\n}\n\nconst bloques = Array.isArray(body.bloques) ? body.bloques : [];\nlet bloques_texto = bloques\n  .filter((b) => b.tipo !== 'imagen_despues')\n  .map(formatearBloque)\n  .filter(Boolean)\n  .join('\\n\\n') || '(sin bloques en el informe)';\n\nconst binary = {};\nconst adjuntos = [];\n\nif (body.foto_antes) {\n  binary.foto_antes = await this.helpers.prepareBinaryData(\n    Buffer.from(body.foto_antes, 'base64'), 'tu-foto.jpg', 'image/jpeg'\n  );\n  adjuntos.push('tu foto original');\n}\n\nconst bloqueDespues = bloques.find((b) => b.tipo === 'imagen_despues' && b.url);\nif (bloqueDespues) {\n  const raw = bloqueDespues.url;\n  const match = typeof raw === 'string' && raw.match(/^data:(image\\/\\w+);base64,(.*)$/);\n  if (match) {\n    binary.foto_despues = await this.helpers.prepareBinaryData(Buffer.from(match[2], 'base64'), 'simulacion.jpg', match[1]);\n    adjuntos.push('la simulación');\n  } else if (typeof raw === 'string' && /^https?:\\/\\//.test(raw)) {\n    bloques_texto += `\\n\\nSimulación: ${raw}`;\n  } else if (typeof raw === 'string' && raw.length > 100) {\n    binary.foto_despues = await this.helpers.prepareBinaryData(Buffer.from(raw, 'base64'), 'simulacion.jpg', 'image/jpeg');\n    adjuntos.push('la simulación');\n  }\n}\n\nconst notaAdjuntos = adjuntos.length ? `\\n\\n(Se adjunta: ${adjuntos.join(' y ')}.)` : '';\n\nreturn [{\n  json: {\n    nombre: body.nombre || '',\n    email: body.email,\n    resumen: body.resumen || '',\n    bloques_texto: bloques_texto + notaAdjuntos,\n  },\n  binary,\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        180
+      ],
+      "id": "e5f6a7b8-c9d0-4e1f-8a2b-3c4d5e6f7a8b",
+      "name": "Formatear informe (usuario)"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "=Aquí tienes tu informe",
+        "emailType": "text",
+        "message": "=Hola {{ $json.nombre }},\n\nAquí tienes tu informe completo:\n\n{{ $json.resumen }}\n\n{{ $json.bloques_texto }}\n\nGracias por confiar en nosotros.",
+        "options": {
+          "appendAttribution": false,
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "foto_antes"
+              },
+              {
+                "property": "foto_despues"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        180
+      ],
+      "id": "f6a7b8c9-d0e1-4f2a-9b3c-4d5e6f7a8b9c",
+      "name": "Enviar email al usuario",
+      "webhookId": "a7b8c9d0-e1f2-4a3b-8c4d-5e6f7a8b9c0d"
     }
   ],
   "connections": {
@@ -67,6 +110,11 @@
         [
           {
             "node": "Formatear lead",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Formatear informe (usuario)",
             "type": "main",
             "index": 0
           }
@@ -78,6 +126,17 @@
         [
           {
             "node": "Enviar email al negocio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatear informe (usuario)": {
+      "main": [
+        [
+          {
+            "node": "Enviar email al usuario",
             "type": "main",
             "index": 0
           }
