@@ -29,7 +29,7 @@ const LEAD_WEBHOOK_URL = "https://random-n8n.9zi4ji.easypanel.host/webhook/landi
 // simplemente no hay POST.
 const CUALIFICACION_WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_CUALIFICACION;
 
-const { marca, analisis, respuesta, captura, cualificacion, onboarding } = config;
+const { marca, analisis, respuesta, captura, cualificacion, onboarding, encuesta_espera: encuestaEspera } = config;
 const { colores, hero, textos_upload: t, footer } = marca;
 const capturaModo = captura === "camara" ? "camara" : "galeria";
 
@@ -935,7 +935,10 @@ export default function LandingAura() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [sending, setSending] = useState(false);
-  const [lead, setLead] = useState({ nombre: "", telefono: "", email: "", franja: "Mañanas" });
+  const [lead, setLead] = useState({
+    nombre: "", telefono: "", email: "", franja: "Mañanas",
+    edad: "", motivacion: "",
+  });
   const [barsOn, setBarsOn] = useState(false);
   const [leadWallUnlocked, setLeadWallUnlocked] = useState(false);
   const fileRef = useRef(null);
@@ -948,7 +951,7 @@ export default function LandingAura() {
     : ["Analizando…"];
 
   useEffect(() => {
-    if (view !== "analyzing") return;
+    if (view !== "analyzing" || encuestaEspera?.activo) return;
     const tick = setInterval(() => setMsgIdx((i) => (i + 1) % mensajesCarga.length), 1900);
     return () => clearInterval(tick);
   }, [view]);
@@ -1071,6 +1074,9 @@ export default function LandingAura() {
             email: lead.email.trim(),
             telefono: lead.telefono.trim(),
             franja: lead.franja,
+            // Respondidas (opcionalmente) durante la espera del análisis.
+            edad: lead.edad.trim(),
+            motivacion: lead.motivacion,
             resumen: result?.resumen || "",
             bloques: result?.bloques || [],
             // Foto original subida por el cliente ("antes"), en base64 sin
@@ -1100,7 +1106,7 @@ export default function LandingAura() {
     setResult(null);
     setConsent(false);
     setError(null);
-    setLead({ nombre: "", telefono: "", email: "", franja: "Mañanas" });
+    setLead({ nombre: "", telefono: "", email: "", franja: "Mañanas", edad: "", motivacion: "" });
     setLeadWallUnlocked(false);
   };
 
@@ -1290,6 +1296,8 @@ export default function LandingAura() {
         @media (prefers-reduced-motion: reduce) { .scan-line { animation: none; top: 50%; } }
         .scan-msg { font-family: 'Fraunces', serif; font-size: 19px; color: var(--ink); min-height: 28px; }
         .scan-sub { font-size: 13px; color: var(--ink-soft); margin-top: 8px; }
+        .wait-survey { max-width: 320px; margin: 8px auto 0; text-align: left; }
+        .wait-intro { font-family: 'Fraunces', serif; font-size: 17px; text-align: center; margin-bottom: 18px; }
 
         .report-head { text-align: center; padding: 44px 0 6px; }
         .report-head .thumb {
@@ -1560,8 +1568,42 @@ export default function LandingAura() {
               <div className="scan-grid" />
               <div className="scan-line" />
             </div>
-            <div className="scan-msg">{mensajesCarga[msgIdx]}</div>
-            <div className="scan-sub">{t.scan_sub}</div>
+            {encuestaEspera?.activo ? (
+              <div className="wait-survey">
+                <p className="wait-intro">{encuestaEspera.intro}</p>
+                <div className="field">
+                  <label htmlFor="edad">{encuestaEspera.edad.pregunta}</label>
+                  <input
+                    id="edad"
+                    type="number"
+                    inputMode="numeric"
+                    min="0"
+                    max="120"
+                    placeholder={encuestaEspera.edad.placeholder}
+                    value={lead.edad}
+                    onChange={(e) => setLead({ ...lead, edad: e.target.value })}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="motivacion">{encuestaEspera.motivacion.pregunta}</label>
+                  <select
+                    id="motivacion"
+                    value={lead.motivacion}
+                    onChange={(e) => setLead({ ...lead, motivacion: e.target.value })}
+                  >
+                    <option value="" disabled>Elige una opción</option>
+                    {encuestaEspera.motivacion.opciones.map((o) => (
+                      <option key={o} value={o}>{o}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="scan-msg">{mensajesCarga[msgIdx]}</div>
+                <div className="scan-sub">{t.scan_sub}</div>
+              </>
+            )}
           </div>
         )}
 

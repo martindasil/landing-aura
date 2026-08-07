@@ -276,4 +276,28 @@ export default {
       },
     },
   },
+
+  // Mini-encuesta que se muestra DURANTE la espera del análisis, en vez de
+  // los mensajes rotativos — aprovecha esos segundos de espera en vez de
+  // dejarlos vacíos. No bloquea nada: el análisis sigue su curso aunque el
+  // usuario no llegue a responder. Las respuestas viajan con el resto del
+  // lead al enviar el formulario del lead-wall.
+  encuesta_espera: {
+    activo: true,
+    intro: "Como tenemos 30 segundos, cuéntame:",
+    edad: {
+      pregunta: "¿Qué edad tienes?",
+      placeholder: "Ej. 34",
+    },
+    motivacion: {
+      pregunta: "¿Qué te hace ilusión de ver tu informe?",
+      opciones: [
+        "Saber qué es exactamente eso que veo y no sé nombrar",
+        "Que me digan por dónde empezar si no puedo hacérmelo todo",
+        "Conocer qué tratamientos existen y cuánto cuestan más o menos",
+        "Verlo por mi cuenta antes de pisar una clínica",
+        "Curiosidad, por ver qué me dice",
+      ],
+    },
+  },
 };
