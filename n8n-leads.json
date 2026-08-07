@@ -40,6 +40,7 @@
         "emailType": "text",
         "message": "=Nuevo lead recibido desde la landing\n\nNombre: {{ $json.nombre }}\nTeléfono: {{ $json.telefono }}\nFranja horaria preferida: {{ $json.franja }}\nFecha: {{ $json.fecha }}\nOrigen: {{ $json.origen }}\n\nResumen del informe:\n{{ $json.resumen }}\n\n{{ $json.bloques_texto }}",
         "options": {
+          "appendAttribution": false,
           "attachmentsUi": {
             "attachmentsBinary": [
               {
