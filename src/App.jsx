@@ -260,7 +260,10 @@ const MEDIAPIPE_MODEL_URL =
 
 const AUTOCAPTURE_ESTABLE_MS = 1500;
 const DETECCION_INTERVALO_MS = 150;
-const ANALYSIS_TIMEOUT_MS = 5000;
+// Red de seguridad, no una promesa de velocidad: un análisis real vía LLM
+// normalmente tarda 8-20s. Antes estaba en 5000ms y abortaba análisis que
+// sí estaban funcionando (se veían como "sin créditos" sin serlo).
+const ANALYSIS_TIMEOUT_MS = 20000;
 
 // Clasifica el recuadro de rostro que devuelve MediaPipe contra la zona del
 // óvalo guía (centro del encuadre). Todo esto ocurre con los números que ya
@@ -948,9 +951,7 @@ export default function LandingAura() {
 
   useEffect(() => {
     if (view !== "analyzing") return;
-    // Al ritmo del análisis real (máx. ANALYSIS_TIMEOUT_MS), un intervalo
-    // más corto que el de antes para que se lleguen a ver varios mensajes.
-    const tick = setInterval(() => setMsgIdx((i) => (i + 1) % mensajesCarga.length), 1000);
+    const tick = setInterval(() => setMsgIdx((i) => (i + 1) % mensajesCarga.length), 1900);
     return () => clearInterval(tick);
   }, [view]);
 

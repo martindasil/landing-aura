@@ -20,7 +20,7 @@ export default {
       {
         icono: "📸",
         titulo: "Te haces una foto",
-        texto: "Sube una foto o hazte un selfie con la cámara del móvil, de frente y con buena luz.",
+        texto: "Te haces una foto en el momento con la cámara del móvil, de frente y con buena luz.",
       },
       {
         icono: "🔎",
@@ -76,7 +76,7 @@ export default {
       cambiar_foto: "Cambiar foto",
       boton_analizar: "Analizar mi piel →",
       nota_privacidad: "Análisis gratuito y sin compromiso · Resultados al instante",
-      scan_sub: "Tu informe estará listo en menos de 5 segundos",
+      scan_sub: "Esto tarda solo unos segundos",
       informe_titulo: "Tu informe de piel",
       analizar_otra: "Analizar otra foto",
       form_titulo: "Reserva tu valoración",
