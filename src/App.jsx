@@ -48,7 +48,15 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // cualquiera" (eso aceptaría cosas como 111111111): tiene que empezar por
 // un prefijo que exista de verdad.
 const PHONE_RE = /^(?:\+34|0034)?[6789]\d{8}$/;
-const telefonoValido = (valor) => PHONE_RE.test((valor || "").replace(/[\s-]+/g, ""));
+const telefonoValido = (valor) => {
+  const limpio = (valor || "").replace(/[\s-]+/g, "");
+  if (!PHONE_RE.test(limpio)) return false;
+  // Además del formato, exige variedad mínima de dígitos: un número real
+  // casi nunca se repite tan poco. Filtra números "de prueba" tipo
+  // 666777888 o 666666666, que cumplirían el formato pero no son reales.
+  const digitos = limpio.replace(/^(\+34|0034)/, "");
+  return new Set(digitos).size >= 4;
+};
 
 // ── Formulario de cualificación: scoring y horquilla de precio ────────
 // Funciones puras: todos los números de negocio vienen de
