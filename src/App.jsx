@@ -320,7 +320,7 @@ function CameraCapture({ onFile }) {
   const countdownActiveRef = useRef(false);
   const countdownTimeoutsRef = useRef([]);
 
-  const [status, setStatus] = useState("starting"); // starting | live | captured | error
+  const [status, setStatus] = useState("idle"); // idle | starting | live | captured | error
   const [shot, setShot] = useState(null);
   const [detection, setDetection] = useState("loading"); // loading | unsupported | none | off | centered
   const [offReason, setOffReason] = useState(null); // lejos | cerca | descentrado
@@ -385,8 +385,13 @@ function CameraCapture({ onFile }) {
     if (status === "live") attachStream(videoRef.current, streamRef.current);
   }, [status]);
 
+  // OJO: no se llama a startCamera() aquí. Pedir la cámara automáticamente
+  // al montar (sin gesto directo del usuario) hace que varios navegadores
+  // Android — sobre todo Samsung Internet — rechacen getUserMedia en
+  // silencio, sin llegar a mostrar el diálogo de permiso. Por eso el
+  // primer paso siempre es un botón que el usuario toca (ver status
+  // "idle" más abajo): eso sí cuenta como gesto directo en todos lados.
   useEffect(() => {
-    startCamera();
     return () => {
       stopStream();
       clearCountdownTimeouts();
@@ -528,6 +533,22 @@ function CameraCapture({ onFile }) {
     stopStream();
     onFile(new File([blob], "captura.jpg", { type: "image/jpeg" }));
   };
+
+  if (status === "idle") {
+    return (
+      <div className="camera-wrap">
+        <div className="camera-frame">
+          <div className="camera-idle">
+            <div className="camera-idle-icon">📷</div>
+            <div className="camera-idle-text">Toca para activar la cámara</div>
+          </div>
+          <div className="camera-oval" />
+        </div>
+        <div className="camera-trust">{TEXTO_CONFIANZA_CAMARA}</div>
+        <button className="btn" onClick={startCamera}>Activar cámara</button>
+      </div>
+    );
+  }
 
   if (status === "error") {
     return (
@@ -1216,6 +1237,13 @@ export default function LandingAura() {
         .camera-frame video, .camera-frame img {
           width: 100%; height: 100%; object-fit: cover; display: block; transform: scaleX(-1);
         }
+        .camera-idle {
+          position: absolute; inset: 0; z-index: 1;
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
+          gap: 10px; color: #FDFBF8; text-align: center; padding: 20px;
+        }
+        .camera-idle-icon { font-size: 32px; opacity: 0.85; }
+        .camera-idle-text { font-size: 13px; opacity: 0.8; max-width: 200px; line-height: 1.4; }
         .camera-oval {
           position: absolute; inset: 9% 15%; border-radius: 50% / 58%;
           border: 3px solid rgba(253,251,248,0.85);
