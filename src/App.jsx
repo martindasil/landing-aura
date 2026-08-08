@@ -1173,8 +1173,8 @@ export default function LandingAura() {
         .brand { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 600; letter-spacing: 0.02em; color: var(--sage-deep); }
 
         .gancho { text-align: center; padding: 40px 0 0; max-width: 480px; margin: 0 auto; }
-        .gancho h2 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 24px; color: var(--ink); margin-bottom: 12px; }
-        .gancho p { color: var(--ink-soft); font-size: 15px; line-height: 1.6; }
+        .gancho h2 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 30px; color: var(--ink); margin-bottom: 14px; }
+        .gancho p { color: var(--ink); font-size: 18px; line-height: 1.6; }
 
         .onboard-wrap { padding: 52px 0 8px; }
         .onboard-card { max-width: 420px; margin: 0 auto; text-align: center; padding: 36px 28px; }
