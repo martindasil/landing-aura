@@ -43,6 +43,18 @@ export default {
   marca: {
     nombre: "Clínica Aura",
 
+    // Texto "gancho" mostrado entre el nombre de marca y el tutorial de
+    // bienvenida (solo en la vista onboarding). Opcional: si no se define,
+    // no se muestra nada ahí.
+    gancho: {
+      titulo: "El Efecto Halo",
+      texto:
+        "Es un sesgo cognitivo donde el cerebro tiende a asumir de manera " +
+        "inconsciente que una persona atractiva posee también otras cualidades " +
+        "positivas como inteligencia, honestidad o competencia. Esto se genera " +
+        "con una primera impresión y el primer paso lo estás tomando.",
+    },
+
     colores: {
       bg: "#FBF8F4",
       card: "#FFFFFF",

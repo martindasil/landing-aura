@@ -1172,6 +1172,10 @@ export default function LandingAura() {
         .topbar { display: flex; align-items: center; justify-content: space-between; padding: 20px 0 0; }
         .brand { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 600; letter-spacing: 0.02em; color: var(--sage-deep); }
 
+        .gancho { text-align: center; padding: 40px 0 0; max-width: 480px; margin: 0 auto; }
+        .gancho h2 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 24px; color: var(--ink); margin-bottom: 12px; }
+        .gancho p { color: var(--ink-soft); font-size: 15px; line-height: 1.6; }
+
         .onboard-wrap { padding: 52px 0 8px; }
         .onboard-card { max-width: 420px; margin: 0 auto; text-align: center; padding: 36px 28px; }
         .onboard-dots { display: flex; justify-content: center; gap: 8px; margin-bottom: 28px; }
@@ -1510,6 +1514,13 @@ export default function LandingAura() {
         <div className="topbar">
           <div className="brand">{marca.nombre}</div>
         </div>
+
+        {view === "onboarding" && marca.gancho && (
+          <div className="gancho">
+            <h2>{marca.gancho.titulo}</h2>
+            <p>{marca.gancho.texto}</p>
+          </div>
+        )}
 
         {view === "onboarding" && (
           <Onboarding cfg={onboarding} onFinish={() => setView("upload")} />
