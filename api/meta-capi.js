@@ -7,14 +7,37 @@
 // configura como variable de entorno en Vercel (sin prefijo VITE_, para
 // que no se empaquete en el JS del cliente).
 //
-// No bloquea nunca al que llama: si falta el token o Meta rechaza el
-// evento, se responde igualmente sin lanzar un error 500 que rompa el
-// flujo del usuario en la web.
+// No bloquea nunca al que llama por fallos de configuración: si falta el
+// token o Meta rechaza el evento, se responde igualmente sin lanzar un
+// error que rompa el flujo del usuario en la web. Sí rechaza (403/429) por
+// origen no permitido o límite de peticiones — eso es intencional.
 
 import crypto from "node:crypto";
+import { checkRateLimit } from "./_lib/rateLimit.js";
 
 const PIXEL_ID = "1223359003262932";
 const GRAPH_API_VERSION = "v21.0";
+
+// Dominio canónico + dominios de preview de Vercel de este proyecto (URL
+// distinta en cada deploy de rama/PR, de ahí el patrón en vez de una lista
+// fija). El dominio raíz landingaura.com redirige con 308 a www antes de
+// que corra ningún JS, así que el navegador nunca manda ese origen aquí.
+const ORIGEN_EXACTO_PERMITIDO = "https://www.landingaura.com";
+const PATRON_PREVIEW_VERCEL = /^https:\/\/landing-aura-[a-z0-9-]+\.vercel\.app$/;
+
+function esOrigenPermitido(origin) {
+  if (!origin) return false;
+  return origin === ORIGEN_EXACTO_PERMITIDO || PATRON_PREVIEW_VERCEL.test(origin);
+}
+
+function aplicarCabecerasCors(res, origin) {
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  // El origen permitido depende de la petición: sin este header, un proxy
+  // o CDN podría cachear la respuesta de un origen y servirla a otro.
+  res.setHeader("Vary", "Origin");
+}
 
 function sha256(valor) {
   return crypto.createHash("sha256").update(valor).digest("hex");
@@ -32,8 +55,34 @@ function normalizarTelefono(telefono) {
 }
 
 export default async function handler(req, res) {
+  const origin = req.headers.origin;
+  const origenValido = esOrigenPermitido(origin);
+
+  if (req.method === "OPTIONS") {
+    if (origenValido) {
+      aplicarCabecerasCors(res, origin);
+      res.status(204).end();
+    } else {
+      res.status(403).end();
+    }
+    return;
+  }
+
+  if (!origenValido) {
+    res.status(403).json({ error: "Origen no permitido" });
+    return;
+  }
+  aplicarCabecerasCors(res, origin);
+
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+
+  const ip = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  const { limited } = await checkRateLimit(ip);
+  if (limited) {
+    res.status(429).json({ error: "Demasiadas peticiones, inténtalo más tarde" });
     return;
   }
 
@@ -44,22 +93,25 @@ export default async function handler(req, res) {
   }
 
   const body = req.body || {};
-  const { event_name, event_id, event_source_url, email, telefono } = body;
+  const { event_name, event_id, event_source_url, email, telefono, fbp, fbc } = body;
   if (!event_name) {
     res.status(400).json({ error: "Falta event_name" });
     return;
   }
 
   try {
-    const forwardedFor = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
     const userAgent = req.headers["user-agent"] || "";
 
     const userData = {};
-    if (forwardedFor) userData.client_ip_address = forwardedFor;
+    if (ip) userData.client_ip_address = ip;
     if (userAgent) userData.client_user_agent = userAgent;
     if (email) userData.em = [sha256(String(email).trim().toLowerCase())];
     const telefonoNormalizado = normalizarTelefono(telefono);
     if (telefonoNormalizado) userData.ph = [sha256(telefonoNormalizado)];
+    // fbp/fbc van en texto plano — no son identificadores personales, son
+    // los IDs de atribución del propio Pixel/anuncio. Solo se hashean em/ph.
+    if (fbp) userData.fbp = fbp;
+    if (fbc) userData.fbc = fbc;
 
     const payload = {
       data: [

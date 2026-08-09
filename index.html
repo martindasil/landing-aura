@@ -26,15 +26,47 @@
         : 'pv-' + Date.now() + '-' + Math.random().toString(36).slice(2);
       fbq('track', 'PageView', {}, { eventID: pageViewEventId });
 
-      fetch('/api/meta-capi', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event_name: 'PageView',
-          event_id: pageViewEventId,
-          event_source_url: location.href,
-        }),
-      }).catch(function () {}); // best-effort: nunca bloquea la carga de la página
+      // _fbp lo pone el propio script del Pixel (fbevents.js, se carga
+      // async) — leerlo justo aquí, en la misma tarea síncrona, siempre
+      // sale vacío: fbevents.js todavía no ha tenido tiempo de ejecutarse
+      // (confirmado con Playwright: 0/5 en pruebas reales sin esperar).
+      // Por eso se sondea la cookie cada 100ms hasta que aparezca o hasta
+      // un tope de 2s — lo que pase antes. Con bloqueadores de anuncios,
+      // fbevents.js nunca llega a cargar y _fbp nunca aparece: pasados los
+      // 2s se manda igualmente el evento sin fbp/fbc, en vez de perderlo o
+      // bloquear la página indefinidamente.
+      function leerCookie(nombre) {
+        var match = document.cookie.match(new RegExp('(?:^|; )' + nombre + '=([^;]*)'));
+        return match ? decodeURIComponent(match[1]) : null;
+      }
+
+      function esperarCookie(nombre, timeoutMs, intervaloMs) {
+        return new Promise(function (resolve) {
+          var limite = Date.now() + timeoutMs;
+          (function intentar() {
+            var valor = leerCookie(nombre);
+            if (valor || Date.now() >= limite) {
+              resolve(valor);
+              return;
+            }
+            setTimeout(intentar, intervaloMs);
+          })();
+        });
+      }
+
+      esperarCookie('_fbp', 2000, 100).then(function (fbp) {
+        fetch('/api/meta-capi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event_name: 'PageView',
+            event_id: pageViewEventId,
+            event_source_url: location.href,
+            fbp: fbp || undefined,
+            fbc: leerCookie('_fbc') || undefined,
+          }),
+        }).catch(function () {}); // best-effort: nunca bloquea la carga de la página
+      });
     </script>
     <noscript><img height="1" width="1" style="display:none"
     src="https://www.facebook.com/tr?id=1223359003262932&ev=PageView&noscript=1"

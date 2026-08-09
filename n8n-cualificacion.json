@@ -7,7 +7,7 @@
         "path": "cualificacion",
         "responseMode": "onReceived",
         "options": {
-          "allowedOrigins": "https://landing-aura-ruddy.vercel.app,https://landing-aura-mllv.vercel.app"
+          "allowedOrigins": "https://www.landingaura.com,https://landing-aura-mllv.vercel.app"
         }
       },
       "type": "n8n-nodes-base.webhook",

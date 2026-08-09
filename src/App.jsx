@@ -58,6 +58,13 @@ const telefonoValido = (valor) => {
   return new Set(digitos).size >= 4;
 };
 
+// Lee una cookie del navegador (usada para _fbp/_fbc, ver evento Lead más
+// abajo). Devuelve null si no existe — nunca cadena vacía.
+function leerCookie(nombre) {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${nombre}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 // ── Formulario de cualificación: scoring y horquilla de precio ────────
 // Funciones puras: todos los números de negocio vienen de
 // cualificacion.pesos / cualificacion.rangos_precio (config del cliente),
@@ -1128,6 +1135,8 @@ export default function LandingAura() {
           event_source_url: window.location.href,
           email: lead.email.trim(),
           telefono: lead.telefono.trim(),
+          fbp: leerCookie("_fbp") || undefined,
+          fbc: leerCookie("_fbc") || undefined,
         }),
       });
     } catch (e) {
