@@ -17,7 +17,24 @@
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
       fbq('init', '1223359003262932');
-      fbq('track', 'PageView');
+
+      // event_id compartido entre el Pixel (navegador) y la Conversions
+      // API (servidor, ver /api/meta-capi.js) para este mismo PageView —
+      // así Meta deduplica y no lo cuenta dos veces.
+      var pageViewEventId = (window.crypto && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : 'pv-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      fbq('track', 'PageView', {}, { eventID: pageViewEventId });
+
+      fetch('/api/meta-capi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_name: 'PageView',
+          event_id: pageViewEventId,
+          event_source_url: location.href,
+        }),
+      }).catch(function () {}); // best-effort: nunca bloquea la carga de la página
     </script>
     <noscript><img height="1" width="1" style="display:none"
     src="https://www.facebook.com/tr?id=1223359003262932&ev=PageView&noscript=1"

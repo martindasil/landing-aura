@@ -10,6 +10,13 @@ Copia `.env.example` a `.env` (o `.env.local`) y ajusta:
   respuestas del formulario de cualificación (bloque al final del informe,
   tras desbloquear el lead-wall). Sin definir, el formulario funciona igual
   y muestra la horquilla de precio al lead, solo que no envía el POST.
+- `META_CAPI_ACCESS_TOKEN` — opcional, **solo en Vercel** (nunca en `.env`
+  local, y a propósito sin el prefijo `VITE_` para que no llegue al
+  navegador). Access token de Meta Conversions API, usado por la función
+  serverless `api/meta-capi.js` para mandar los eventos `PageView` y `Lead`
+  desde el servidor. Se genera en Events Manager → tu Pixel → Configuración
+  → Conversions API. Sin definir, la función no rompe nada, simplemente no
+  envía nada a Meta.
 
 (`WEBHOOK_URL` y `LEAD_WEBHOOK_URL` — análisis de la foto y notificación del
 lead-wall — son constantes al principio de `src/App.jsx`, no variables de
@@ -17,6 +24,23 @@ entorno; edítalas ahí antes de desplegar.)
 
 En Vercel, define estas mismas variables en Project Settings → Environment
 Variables.
+
+## Meta Conversions API
+
+`api/meta-capi.js` es una función serverless de Vercel (se despliega sola,
+sin configuración adicional, por la convención del directorio `api/`) que
+reenvía eventos a Meta desde el servidor:
+
+- **PageView** — disparado desde el propio `index.html` en cada carga,
+  junto al Pixel del navegador, compartiendo `event_id` con él para que
+  Meta deduplique y no lo cuente dos veces.
+- **Lead** — disparado desde `submitLead()` en `src/App.jsx` al enviar el
+  formulario del lead-wall, con el email y teléfono ya capturados. El
+  hasheo (SHA256) y la normalización a formato E.164 ocurren dentro de la
+  función serverless — el frontend nunca hashea ni conoce el access token.
+
+Ambos son best-effort: si `META_CAPI_ACCESS_TOKEN` no está definido o Meta
+rechaza el evento, no se rompe ningún flujo de la web.
 
 ---
 

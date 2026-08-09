@@ -1116,6 +1116,23 @@ export default function LandingAura() {
         console.error("Error notificando el lead:", e);
       }
     }
+    // Evento "Lead" a Meta Conversions API (ver api/meta-capi.js). Es un
+    // best-effort aparte del webhook de arriba: si Meta no está
+    // configurado o falla, no afecta al lead ni al resto del flujo.
+    try {
+      await fetch("/api/meta-capi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_name: "Lead",
+          event_source_url: window.location.href,
+          email: lead.email.trim(),
+          telefono: lead.telefono.trim(),
+        }),
+      });
+    } catch (e) {
+      console.error("Error notificando el evento Lead a Meta:", e);
+    }
     setSending(false);
     if (leadWallActive) {
       setLeadWallUnlocked(true);
