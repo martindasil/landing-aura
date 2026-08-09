@@ -74,6 +74,16 @@ export default async function handler(req, res) {
       ],
     };
 
+    // Va en la raíz del body, hermano de "data" — NUNCA dentro del evento.
+    // Solo se incluye si la variable existe y no está vacía; para
+    // desactivar el modo test basta con borrar la variable de entorno,
+    // sin tocar código. Los eventos con test_event_code no cuentan para
+    // optimización de Meta.
+    const testEventCode = (process.env.META_TEST_EVENT_CODE || "").trim();
+    if (testEventCode) {
+      payload.test_event_code = testEventCode;
+    }
+
     const metaRes = await fetch(
       `https://graph.facebook.com/${GRAPH_API_VERSION}/${PIXEL_ID}/events?access_token=${encodeURIComponent(token)}`,
       {
