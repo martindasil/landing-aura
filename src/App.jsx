@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import config from "./configs/activo.js";
+import { capturarUnaVez, tramoEdad } from "./posthog.js";
 
 // ─────────────────────────────────────────────────────────────
 // VERSIÓN PRODUCCIÓN — Landing interactiva multi-cliente
@@ -246,7 +247,9 @@ function BloqueImagenDespues({ url, etiqueta_legal }) {
     <div className="card">
       <div className="card-label">Simulación</div>
       <div className="sim-frame">
-        <img src={url} alt="Simulación del resultado" />
+        {/* ph-no-capture: muestra el rostro del usuario (simulación),
+            igual que la foto capturada — nunca en el session replay. */}
+        <img className="ph-no-capture" src={url} alt="Simulación del resultado" />
         {/* Etiqueta legal siempre visible superpuesta a la imagen, nunca oculta */}
         {etiqueta_legal && <div className="sim-tag">{etiqueta_legal}</div>}
       </div>
@@ -381,6 +384,7 @@ function CameraCapture({ onFile }) {
       streamRef.current = stream;
       await attachStream(videoRef.current, stream);
       setStatus("live");
+      capturarUnaVez("camara_abierta");
     } catch (e) {
       setStatus("error");
     }
@@ -453,6 +457,7 @@ function CameraCapture({ onFile }) {
     canvas.getContext("2d").drawImage(video, 0, 0);
     setShot(canvas.toDataURL("image/jpeg", 0.9));
     setStatus("captured");
+    capturarUnaVez("foto_capturada");
   };
 
   const startCountdown = () => {
@@ -533,11 +538,13 @@ function CameraCapture({ onFile }) {
     setDetection((prev) => (prev === "unsupported" || prev === "loading" ? prev : "none"));
     setOffReason(null);
     setStatus("live");
+    capturarUnaVez("foto_repetida");
   };
 
   const usePhoto = async () => {
     const blob = await (await fetch(shot)).blob();
     stopStream();
+    capturarUnaVez("foto_confirmada");
     onFile(new File([blob], "captura.jpg", { type: "image/jpeg" }));
   };
 
@@ -600,10 +607,13 @@ function CameraCapture({ onFile }) {
   return (
     <div className="camera-wrap">
       <div className="camera-frame">
+        {/* ph-no-capture en ambos: la promesa de "tu foto no se almacena"
+            incluye no grabarla en el session replay, ni la vista en vivo
+            de la cámara ni la foto ya capturada. */}
         {status === "captured" ? (
-          <img src={shot} alt="Foto capturada" />
+          <img className="ph-no-capture" src={shot} alt="Foto capturada" />
         ) : (
-          <video ref={videoRef} playsInline muted autoPlay />
+          <video className="ph-no-capture" ref={videoRef} playsInline muted autoPlay />
         )}
         {status !== "captured" && (
           <>
@@ -754,6 +764,7 @@ function Cualificacion({ cfg, marca, lead }) {
     const horquilla = calcularHorquillaCualificacion(cfg.rangos_precio, cfg.pesos.valor_anual.objetivo, respuestas);
     setResultado(horquilla);
     setEnviando(true);
+    capturarUnaVez("cualificacion_completada");
     if (CUALIFICACION_WEBHOOK_URL) {
       try {
         await fetch(CUALIFICACION_WEBHOOK_URL, {
@@ -931,7 +942,12 @@ function Onboarding({ cfg, onFinish }) {
   const paso = cfg.pasos[pasoIdx];
   const esUltimo = pasoIdx === cfg.pasos.length - 1;
 
-  const siguiente = () => (esUltimo ? onFinish() : setPasoIdx((i) => i + 1));
+  const siguiente = () => {
+    const numeroPaso = pasoIdx + 1;
+    capturarUnaVez("tutorial_paso_completado", { paso: numeroPaso }, `tutorial_paso_completado_${numeroPaso}`);
+    if (esUltimo) onFinish();
+    else setPasoIdx((i) => i + 1);
+  };
 
   return (
     <div className="onboard-wrap">
@@ -974,6 +990,10 @@ export default function LandingAura() {
 
   const leadWallActive = !!respuesta.lead_wall;
 
+  useEffect(() => {
+    capturarUnaVez("portada_vista");
+  }, []);
+
   const mensajesCarga = analisis.mensajes_carga?.length
     ? analisis.mensajes_carga
     : ["Analizando…"];
@@ -988,6 +1008,7 @@ export default function LandingAura() {
     if (view === "report") {
       setBarsOn(false);
       const tmr = setTimeout(() => setBarsOn(true), 150);
+      capturarUnaVez("informe_parcial_visto");
       return () => clearTimeout(tmr);
     }
   }, [view]);
@@ -1096,6 +1117,8 @@ export default function LandingAura() {
     if (campos.includes("telefono") && !telefonoValido(lead.telefono)) return;
     if (sending) return;
     setSending(true);
+    // La conversión: nunca lleva email/teléfono/nombre como propiedad.
+    capturarUnaVez("datos_entregados");
     if (LEAD_WEBHOOK_URL) {
       try {
         await fetch(LEAD_WEBHOOK_URL, {
@@ -1573,7 +1596,7 @@ export default function LandingAura() {
                 )
               ) : (
                 <div className="preview">
-                  <img src={photo} alt="Tu foto" />
+                  <img className="ph-no-capture" src={photo} alt="Tu foto" />
                   <div className="meta">
                     <b>{t.preview_titulo}</b>
                     <span>{t.preview_nota}</span>
@@ -1633,7 +1656,7 @@ export default function LandingAura() {
         {view === "analyzing" && (
           <div className="scan-stage">
             <div className="scan-frame">
-              <img src={photo} alt="Analizando tu foto" />
+              <img className="ph-no-capture" src={photo} alt="Analizando tu foto" />
               <div className="scan-grid" />
               <div className="scan-line" />
             </div>
@@ -1670,7 +1693,14 @@ export default function LandingAura() {
                   <button
                     className="btn"
                     disabled={!(lead.edad.trim() && lead.motivacion)}
-                    onClick={() => setView("report")}
+                    onClick={() => {
+                      // Nunca la edad exacta como propiedad, solo el tramo.
+                      capturarUnaVez("encuesta_completada", {
+                        motivacion: lead.motivacion,
+                        edad_tramo: tramoEdad(lead.edad),
+                      });
+                      setView("report");
+                    }}
                   >
                     {encuestaEspera.boton_ver_informe}
                   </button>
@@ -1688,7 +1718,7 @@ export default function LandingAura() {
         {view === "report" && result && (
           <>
             <div className="report-head">
-              <img className="thumb" src={photo} alt="" />
+              <img className="thumb ph-no-capture" src={photo} alt="" />
               <h2>{t.informe_titulo}</h2>
               <p>{result.resumen}</p>
             </div>
