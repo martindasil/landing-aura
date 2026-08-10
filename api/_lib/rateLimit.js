@@ -1,4 +1,7 @@
-// Límite de peticiones por IP para api/meta-capi.js.
+// Límite de peticiones por IP, compartido por las funciones serverless de
+// /api (hoy: meta-capi.js y analisis.js). Cada llamante pasa su propio
+// prefix/max/window — cubos independientes por endpoint, así que agotar
+// el límite de uno no afecta al del otro para la misma IP.
 //
 // Implementado con Upstash Redis (HTTP/REST, sin conexiones persistentes —
 // encaja con el modelo serverless) porque el estado en memoria de una
@@ -21,16 +24,27 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
-const VENTANA = "10 m";
-const MAX_PETICIONES = 5;
+// Cacheado por (prefix, max, window): evita reconstruir el wrapper de
+// Ratelimit en cada invocación mientras la instancia de la función siga
+// caliente, sin acoplar entre sí los cubos de los distintos endpoints.
+const limitersPorConfig = new Map();
 
-let limiter = null;
-if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-  limiter = new Ratelimit({
-    redis: Redis.fromEnv(),
-    limiter: Ratelimit.slidingWindow(MAX_PETICIONES, VENTANA),
-    prefix: "meta-capi",
-  });
+function getLimiter(prefix, max, window) {
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    return null;
+  }
+  const claveCache = `${prefix}:${max}:${window}`;
+  if (!limitersPorConfig.has(claveCache)) {
+    limitersPorConfig.set(
+      claveCache,
+      new Ratelimit({
+        redis: Redis.fromEnv(),
+        limiter: Ratelimit.slidingWindow(max, window),
+        prefix,
+      })
+    );
+  }
+  return limitersPorConfig.get(claveCache);
 }
 
 // Devuelve { limited, active }:
@@ -41,7 +55,12 @@ if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) 
 // Un fallo de Upstash (red caída, credenciales inválidas, timeout...) NO
 // debe tumbar la petición completa — se trata igual que "no configurado":
 // se deja pasar y se registra el error, en vez de propagar la excepción.
-export async function checkRateLimit(ip) {
+//
+// prefix/max/window son obligatorios y sin default: cada llamante declara
+// su propio límite explícitamente, en vez de heredar en silencio el de
+// otro endpoint.
+export async function checkRateLimit(ip, { prefix, max, window }) {
+  const limiter = getLimiter(prefix, max, window);
   if (!limiter) {
     return { limited: false, active: false };
   }
@@ -49,7 +68,7 @@ export async function checkRateLimit(ip) {
     const { success } = await limiter.limit(ip || "sin-ip");
     return { limited: !success, active: true };
   } catch (e) {
-    console.error("Error consultando el límite de peticiones en Upstash:", e);
+    console.error(`Error consultando el límite de peticiones en Upstash (${prefix}):`, e);
     return { limited: false, active: false };
   }
 }

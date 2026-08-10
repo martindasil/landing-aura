@@ -80,7 +80,7 @@ export default async function handler(req, res) {
   }
 
   const ip = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
-  const { limited } = await checkRateLimit(ip);
+  const { limited } = await checkRateLimit(ip, { prefix: "meta-capi", max: 5, window: "10 m" });
   if (limited) {
     res.status(429).json({ error: "Demasiadas peticiones, inténtalo más tarde" });
     return;

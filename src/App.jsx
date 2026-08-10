@@ -13,11 +13,14 @@ import { capturarUnaVez, tramoEdad } from "./posthog.js";
 // lógica específica de ningún cliente — para cambiar de cliente,
 // edita únicamente src/configs/activo.js.
 //
-// CONFIGURA ESTAS DOS URLS ANTES DE DESPLEGAR:
+// CONFIGURA ESTA URL ANTES DE DESPLEGAR:
 // ─────────────────────────────────────────────────────────────
 
-// URL de PRODUCCIÓN del webhook de análisis (workflow "Landing IA — Análisis de piel")
-const WEBHOOK_URL = "https://random-n8n.9zi4ji.easypanel.host/webhook/analisis-piel";
+// El análisis ya no llama a n8n directamente desde el navegador — pasa por
+// api/analisis.js (proxy serverless), que valida origen y límite de
+// peticiones antes de reenviar. La URL real del webhook de n8n vive solo
+// ahí, como variable de entorno sin prefijo VITE_ (N8N_ANALISIS_WEBHOOK_URL),
+// para que no vuelva a acabar en el bundle público.
 
 // Opcional: webhook para notificar el lead a la clínica (WhatsApp/email/Airtable).
 // Si lo dejas vacío (""), el formulario funciona pero no envía nada.
@@ -1079,7 +1082,7 @@ export default function LandingAura() {
       const timeoutId = setTimeout(() => timeoutCtrl.abort(), ANALYSIS_TIMEOUT_MS);
       let response;
       try {
-        response = await fetch(WEBHOOK_URL, {
+        response = await fetch("/api/analisis", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           // n8n construye el prompt a partir de `analisis` y valida que
