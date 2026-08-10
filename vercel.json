@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/lente/static/:path(.*)",
+      "destination": "https://eu-assets.i.posthog.com/static/:path"
+    },
+    {
+      "source": "/lente/array/:path(.*)",
+      "destination": "https://eu-assets.i.posthog.com/array/:path"
+    },
+    {
+      "source": "/lente/:path(.*)",
+      "destination": "https://eu.i.posthog.com/:path"
+    }
+  ]
+}

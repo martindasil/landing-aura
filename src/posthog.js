@@ -33,12 +33,21 @@
 import posthog from "posthog-js";
 
 const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY;
-const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST || "https://eu.i.posthog.com";
 
+// Proxy inverso vía Vercel rewrites (ver vercel.json, ruta /lente) — las
+// peticiones a PostHog salen por www.landingaura.com en vez de por
+// eu.i.posthog.com, para que los bloqueadores de contenido que cortan por
+// lista de dominios (uBlock, Brave Shields, DNS a nivel de sistema) dejen
+// de descartarlas. Ruta relativa a propósito: funciona igual en
+// producción y en cualquier preview de Vercel sin hardcodear el dominio.
+// ui_host es aparte — apunta a la app de PostHog (eu.posthog.com, sin el
+// "i."), no a la ingesta — solo se usa para que los enlaces del toolbar
+// abran el proyecto correcto.
 export function initPosthog() {
   if (!POSTHOG_KEY) return;
   posthog.init(POSTHOG_KEY, {
-    api_host: POSTHOG_HOST,
+    api_host: "/lente",
+    ui_host: "https://eu.posthog.com",
     autocapture: true,
     capture_pageview: true,
     enable_heatmaps: true,
