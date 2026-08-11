@@ -963,7 +963,6 @@ function Onboarding({ cfg, onFinish }) {
         <div className="onboard-step" key={pasoIdx}>
           <div className="onboard-icon">{paso.icono}</div>
           <h2>{paso.titulo}</h2>
-          <p>{paso.texto}</p>
         </div>
         <button className="btn" onClick={siguiente}>
           {esUltimo ? cfg.boton_final : cfg.boton_siguiente}
@@ -1240,8 +1239,7 @@ export default function LandingAura() {
           display: flex; align-items: center; justify-content: center; font-size: 28px;
           margin: 0 auto 18px;
         }
-        .onboard-step h2 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 22px; margin-bottom: 10px; }
-        .onboard-step p { color: var(--ink-soft); font-size: 14.5px; line-height: 1.55; }
+        .onboard-step h2 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 30px; line-height: 1.25; }
 
         .hero { padding: 52px 0 8px; text-align: center; }
         .eyebrow {
@@ -1569,7 +1567,7 @@ export default function LandingAura() {
 
         {view === "onboarding" && marca.gancho && (
           <div className="gancho">
-            <h2>{marca.gancho.titulo}</h2>
+            {marca.gancho.titulo && <h2>{marca.gancho.titulo}</h2>}
             <p>{marca.gancho.texto}</p>
           </div>
         )}
