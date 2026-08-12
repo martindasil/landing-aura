@@ -11,15 +11,15 @@ export default {
   // Tutorial de bienvenida: se muestra ANTES de la vista de subida/cámara,
   // así que el permiso de cámara nunca se pide antes de que el usuario
   // sepa para qué es. Un paso por pantalla, botón "Siguiente" hasta el
-  // último, que usa boton_final y lleva a la vista de captura. Solo el
-  // título por paso (sin texto largo debajo) — deja hueco para que el
-  // título se vea grande.
+  // último, que usa boton_final y lleva a la vista de captura. Solo
+  // título por paso; `texto` es opcional y solo lo lleva el primer paso,
+  // como aclaración de privacidad justo donde se pide la foto.
   onboarding: {
     activo: true,
     boton_siguiente: "Siguiente",
     boton_final: "Empezar",
     pasos: [
-      { icono: "📸", titulo: "Te haces una foto" },
+      { icono: "📸", titulo: "Te haces una foto", texto: "Que no se almacenan en ningún sitio" },
       { icono: "🔎", titulo: "Analizamos tu piel" },
       { icono: "📋", titulo: "Recibes tu informe" },
       { icono: "📞", titulo: "Te contactamos" },
@@ -31,12 +31,13 @@ export default {
 
     // Texto "gancho" mostrado entre el nombre de marca y el tutorial de
     // bienvenida (solo en la vista onboarding). Opcional: si no se define,
-    // no se muestra nada ahí.
+    // no se muestra nada ahí. "**...**" se resalta en negrita (ver
+    // renderBold en App.jsx).
     gancho: {
       texto:
         "Siempre que te miras al espejo, te revisas bien de cerca y te centras " +
         "en esas imperfecciones que solo ves tú. Queremos liberarte ese espacio " +
-        "mental con nuestro tratamiento. Hazte un análisis y te entregamos " +
+        "mental con nuestro tratamiento. **Hazte un análisis** y te entregamos " +
         "nuestra solución.",
     },
 

@@ -43,6 +43,12 @@ function renderEmphasis(text) {
   return parts.map((part, i) => (i % 2 === 1 ? <em key={i}>{part}</em> : part));
 }
 
+// Convierte "texto **destacado**" en JSX con <strong> en la parte marcada
+function renderBold(text) {
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  return parts.map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part));
+}
+
 const scoreTone = (n) => (n >= 75 ? "var(--sage)" : n >= 55 ? "var(--amber)" : "var(--clay)");
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -963,6 +969,7 @@ function Onboarding({ cfg, onFinish }) {
         <div className="onboard-step" key={pasoIdx}>
           <div className="onboard-icon">{paso.icono}</div>
           <h2>{paso.titulo}</h2>
+          {paso.texto && <p>{paso.texto}</p>}
         </div>
         <button className="btn" onClick={siguiente}>
           {esUltimo ? cfg.boton_final : cfg.boton_siguiente}
@@ -1240,6 +1247,7 @@ export default function LandingAura() {
           margin: 0 auto 18px;
         }
         .onboard-step h2 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 30px; line-height: 1.25; }
+        .onboard-step p { color: var(--ink-soft); font-size: 14.5px; line-height: 1.55; margin-top: 8px; }
 
         .hero { padding: 52px 0 8px; text-align: center; }
         .eyebrow {
@@ -1568,7 +1576,7 @@ export default function LandingAura() {
         {view === "onboarding" && marca.gancho && (
           <div className="gancho">
             {marca.gancho.titulo && <h2>{marca.gancho.titulo}</h2>}
-            <p>{marca.gancho.texto}</p>
+            <p>{renderBold(marca.gancho.texto)}</p>
           </div>
         )}
 
