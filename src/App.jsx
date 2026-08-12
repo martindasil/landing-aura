@@ -1227,8 +1227,6 @@ export default function LandingAura() {
         }
         .wrap { max-width: 680px; margin: 0 auto; padding: 0 20px 64px; }
 
-        .topbar { display: flex; align-items: center; justify-content: space-between; padding: 20px 0 0; }
-        .brand { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 600; letter-spacing: 0.02em; color: var(--sage-deep); }
 
         .gancho { text-align: center; padding: 40px 0 0; max-width: 480px; margin: 0 auto; }
         .gancho h2 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 30px; color: var(--ink); margin-bottom: 14px; }
@@ -1569,10 +1567,6 @@ export default function LandingAura() {
       `}</style>
 
       <div className="wrap">
-        <div className="topbar">
-          <div className="brand">{marca.nombre}</div>
-        </div>
-
         {view === "onboarding" && marca.gancho && (
           <div className="gancho">
             {marca.gancho.titulo && <h2>{marca.gancho.titulo}</h2>}
@@ -1811,7 +1805,7 @@ export default function LandingAura() {
             <div className="check">✓</div>
             <h2>{t.done_saludo}, {lead.nombre.split(" ")[0]}!</h2>
             <p>
-              Hemos enviado tu solicitud a {marca.nombre}.
+              Hemos enviado tu solicitud.
               {campos.includes("franja") && (
                 <> Te llamaremos por las <b>{lead.franja.toLowerCase()}</b></>
               )}
@@ -1828,11 +1822,7 @@ export default function LandingAura() {
           </div>
         )}
 
-        <footer>
-          {footer}
-          <br />
-          {marca.nombre}
-        </footer>
+        <footer>{footer}</footer>
       </div>
     </div>
   );
