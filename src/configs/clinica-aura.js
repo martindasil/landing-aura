@@ -41,6 +41,20 @@ export default {
         "nuestra solución.",
     },
 
+    // CTA mostrado debajo del tutorial de bienvenida (solo en la vista
+    // onboarding), para quien ya sabe lo que quiere y prefiere saltarse el
+    // análisis e ir directo a reservar. Opcional: si no se define, no se
+    // muestra nada ahí. `enlace` vacío deja el botón listo pero inerte (no
+    // navega a ningún sitio) hasta que se rellene con el enlace real del
+    // calendario — en cuanto se rellene, el botón funciona solo, sin
+    // tocar código.
+    agenda: {
+      titulo: "¿Ya sabes lo que quieres?",
+      texto: "Entonces revisa el calendario y apúntate a la siguiente sesión.",
+      boton: "Agendar",
+      enlace: "",
+    },
+
     colores: {
       bg: "#FBF8F4",
       card: "#FFFFFF",

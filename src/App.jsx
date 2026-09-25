@@ -1232,6 +1232,11 @@ export default function LandingAura() {
         .gancho h2 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 30px; color: var(--ink); margin-bottom: 14px; }
         .gancho p { color: var(--ink); font-size: 18px; line-height: 1.6; }
 
+        .agenda-cta { text-align: center; padding: 44px 0 8px; max-width: 420px; margin: 0 auto; }
+        .agenda-cta h2 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 32px; line-height: 1.2; color: var(--ink); margin-bottom: 12px; }
+        .agenda-cta p { color: var(--ink-soft); font-size: 16px; line-height: 1.6; margin-bottom: 4px; }
+        .agenda-cta .btn { text-decoration: none; text-transform: uppercase; letter-spacing: 0.04em; }
+
         .onboard-wrap { padding: 52px 0 8px; }
         .onboard-card { max-width: 420px; margin: 0 auto; text-align: center; padding: 36px 28px; }
         .onboard-dots { display: flex; justify-content: center; gap: 8px; margin-bottom: 28px; }
@@ -1576,6 +1581,24 @@ export default function LandingAura() {
 
         {view === "onboarding" && (
           <Onboarding cfg={onboarding} onFinish={() => setView("upload")} />
+        )}
+
+        {view === "onboarding" && marca.agenda && (
+          <div className="agenda-cta">
+            <h2>{marca.agenda.titulo}</h2>
+            <p>{marca.agenda.texto}</p>
+            <a
+              className="btn"
+              href={marca.agenda.enlace || "#"}
+              target={marca.agenda.enlace ? "_blank" : undefined}
+              rel={marca.agenda.enlace ? "noopener noreferrer" : undefined}
+              onClick={(e) => {
+                if (!marca.agenda.enlace) e.preventDefault();
+              }}
+            >
+              {marca.agenda.boton}
+            </a>
+          </div>
         )}
 
         {view === "upload" && (
